@@ -31,6 +31,7 @@ if __name__ == "__main__":
     model = DQN(CustomDQNPolicy, env, verbose=1, double_q = False)
     model.pretrain(dataset, n_epochs=1000)
 
+    #see how good it is right now
     reward_sum = 0.0
     obs = env.reset()
     for i in range(0, 5):
@@ -70,6 +71,7 @@ if __name__ == "__main__":
         train_dataset = ExpertDataset(expert_path = "I:\Code\BachelorThesis\cartpole\data\expert_explore_cartpole.npz", traj_limitation=1, batch_size=128)
         model.pretrain(train_dataset, n_epochs = 1000)
 
+    #test it
     reward_sum = 0.0
     obs = env.reset()
     for i in range(0, 5):
