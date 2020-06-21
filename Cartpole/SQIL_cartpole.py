@@ -20,7 +20,7 @@ if __name__ == "__main__":
     expert_data = np.load("I:\Code\BachelorThesis\cartpole\data\expert_cartpole.npz")
     expert_array = []
     for i in range(0, len(expert_data.files)):
-        expert_array.append(expert_data[expert_data.files[i]][40:60])
+        expert_array.append(expert_data[expert_data.files[i]][:100])
     len_expert_set = len(expert_array[0])
     print(len_expert_set)
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     #train network on initial dataset
     dataset = ExpertDataset(expert_path = "I:\Code\BachelorThesis\cartpole\data\expert_cartpole.npz", traj_limitation=1, batch_size=128)
     model = DQN(CustomDQNPolicy, env, verbose=1, double_q = False)
-    model.pretrain(dataset, n_epochs=1000)
+    model.pretrain(dataset, n_epochs=500)
 
     #see how good it is right now
     reward_sum = 0.0
@@ -46,7 +46,7 @@ if __name__ == "__main__":
         obs = env.reset()
 
     #train the network by exploring
-    for i in range(0, 5):
+    for i in range(0, 200):
         #let agent explore
         generate_expert_traj(model, 'I:\Code\BachelorThesis\cartpole\data\explore_cartpole', n_episodes = int(len_expert_set/10))
 
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     #test it
     reward_sum = 0.0
     obs = env.reset()
-    for i in range(0, 5):
+    for i in range(0, 100000000):
         done = False
         while not done:
             action, _ = model.predict(obs)

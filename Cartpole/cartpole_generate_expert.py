@@ -1,4 +1,5 @@
 import gym
+import gym_cartpole
 
 from stable_baselines.common.vec_env import DummyVecEnv
 from stable_baselines.deepq.policies import FeedForwardPolicy
@@ -9,7 +10,7 @@ from stable_baselines.gail import generate_expert_traj
 
 import time
 
-env = gym.make('CartPole-v1')
+env = gym.make('MountainCar-v0')
 
 # Custom MLP policy of two layers of size 32 each
 class CustomDQNPolicy(FeedForwardPolicy):
@@ -21,14 +22,14 @@ class CustomDQNPolicy(FeedForwardPolicy):
 
 model = DQN(CustomDQNPolicy, env, verbose=1)
 
-model.learn(total_timesteps=100000)
+#model.learn(total_timesteps=25000)
 
-generate_expert_traj(model, "I:\Code\BachelorThesis\cartpole\data\expert_cartpole", n_episodes=10)
+#generate_expert_traj(model, "I:\Code\BachelorThesis\cartpole\data\expert_cartpole", n_episodes=10)
 
 #test it
 reward_sum = 0.0
 obs = env.reset()
-for i in range(0, 5):
+for i in range(0, 10):
     done = False
     while not done:
         action, _ = model.predict(obs)
