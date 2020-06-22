@@ -12,14 +12,14 @@ from stable_baselines.deepq.policies import FeedForwardPolicy
 class CustomDQNPolicy(FeedForwardPolicy):
     def __init__(self, *args, **kwargs):
         super(CustomDQNPolicy, self).__init__(*args, **kwargs,
-                                           layers=[32, 32],
+                                           layers=[128, 64, 32],
                                            layer_norm=False,
                                            feature_extraction="mlp")
 
 def main():
     env = gym.make('cartpole_custom-v0')
 
-    # model = SQIL_DQN(CustomDQNPolicy, env, verbose=1, buffer_size = 291, double_q = False)
+    # model = SQIL_DQN(CustomDQNPolicy, env, verbose=1, buffer_size = 10000, double_q = False, seed = 42)
     # model.intializeExpertBuffer("Cartpole/data/cartpole_custom_expert.csv", 4)
     # model.learn(total_timesteps=100000)
     # model.save("Cartpole/data/cartpole_custom-v0_agent")
