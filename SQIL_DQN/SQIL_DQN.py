@@ -22,10 +22,10 @@ class SQIL_DQN(DQN):
         path should be the path to a csv file with the following shape: (n, (observations, actions))
         only the first n will be taken
         """
-        self.expert_buffer = ReplayBuffer(self.buffer_size)
-
         df = pd.read_csv(path, sep = ";")
-        ar = df.to_numpy()[:self.buffer_size, 1:]
+        ar = df.to_numpy()[:, 1:]
+
+        self.expert_buffer = ReplayBuffer(ar.shape[0])
 
         self.expert_buffer.extend(ar[:-1, :obs_len], ar[:-1, obs_len:], np.ones(self.buffer_size), ar[1:, :obs_len], np.array([[False] for i in range(0, self.buffer_size)]))
 
