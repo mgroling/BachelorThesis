@@ -16,53 +16,6 @@ from stable_baselines.deepq.policies import DQNPolicy
 from stable_baselines import DQN
 
 class SQIL_DQN(DQN):
-    def __init__(self, policy, env, gamma=0.99, learning_rate=5e-4, buffer_size=50000, exploration_fraction=0.1,
-                 exploration_final_eps=0.02, exploration_initial_eps=1.0, train_freq=1, batch_size=32, double_q=True,
-                 learning_starts=1000, target_network_update_freq=500, prioritized_replay=False,
-                 prioritized_replay_alpha=0.6, prioritized_replay_beta0=0.4, prioritized_replay_beta_iters=None,
-                 prioritized_replay_eps=1e-6, param_noise=False,
-                 n_cpu_tf_sess=None, verbose=0, tensorboard_log=None,
-                 _init_setup_model=True, policy_kwargs=None, full_tensorboard_log=False, seed=None):
-
-        # TODO: replay_buffer refactoring
-        super(SQIL_DQN, self).__init__(policy=policy, env=env, verbose=verbose, policy_kwargs=policy_kwargs, seed=seed, n_cpu_tf_sess=n_cpu_tf_sess)
-
-        self.param_noise = param_noise
-        self.learning_starts = learning_starts
-        self.train_freq = train_freq
-        self.prioritized_replay = prioritized_replay
-        self.prioritized_replay_eps = prioritized_replay_eps
-        self.batch_size = batch_size
-        self.target_network_update_freq = target_network_update_freq
-        self.prioritized_replay_alpha = prioritized_replay_alpha
-        self.prioritized_replay_beta0 = prioritized_replay_beta0
-        self.prioritized_replay_beta_iters = prioritized_replay_beta_iters
-        self.exploration_final_eps = exploration_final_eps
-        self.exploration_initial_eps = exploration_initial_eps
-        self.exploration_fraction = exploration_fraction
-        self.buffer_size = buffer_size
-        self.learning_rate = learning_rate
-        self.gamma = gamma
-        self.tensorboard_log = tensorboard_log
-        self.full_tensorboard_log = full_tensorboard_log
-        self.double_q = double_q
-
-        self.graph = None
-        self.sess = None
-        self._train_step = None
-        self.step_model = None
-        self.update_target = None
-        self.act = None
-        self.proba_step = None
-        self.replay_buffer = None
-        self.beta_schedule = None
-        self.exploration = None
-        self.params = None
-        self.summary = None
-
-        if _init_setup_model:
-            self.setup_model()
-
     def intializeExpertBuffer(self, path, obs_len):
         """
         Intializes the expert buffer with rewards all set to 1
@@ -76,7 +29,8 @@ class SQIL_DQN(DQN):
 
         self.expert_buffer.extend(ar[:-1, :obs_len], ar[:-1, obs_len:], np.ones(self.buffer_size), ar[1:, :obs_len], np.array([[False] for i in range(0, self.buffer_size)]))
 
-    def learn(self, total_timesteps, callback=None, log_interval=100, tb_log_name="DQN", reset_num_timesteps=True, replay_wrapper=None):
+    def learn(self, total_timesteps, callback=None, log_interval=100, tb_log_name="DQN",
+              reset_num_timesteps=True, replay_wrapper=None):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         callback = self._init_callback(callback)
@@ -105,8 +59,8 @@ class SQIL_DQN(DQN):
 
             # Create the schedule for exploration starting from 1.
             self.exploration = LinearSchedule(schedule_timesteps=int(self.exploration_fraction * total_timesteps),
-                                                initial_p=self.exploration_initial_eps,
-                                                final_p=self.exploration_final_eps)
+                                              initial_p=self.exploration_initial_eps,
+                                              final_p=self.exploration_final_eps)
 
             episode_rewards = [0.0]
             episode_successes = []
@@ -158,7 +112,7 @@ class SQIL_DQN(DQN):
                     # Avoid changing the original ones
                     obs_, new_obs_, reward_ = obs, new_obs, rew
                 # Store transition in the replay buffer.
-                self.replay_buffer.add(obs_, action, reward_, new_obs_, done)
+                self.replay_buffer.add(obs_, action, reward_, new_obs_, float(done))
                 obs = new_obs
                 # Save the unnormalized observation
                 if self._vec_normalize_env is not None:
@@ -191,20 +145,19 @@ class SQIL_DQN(DQN):
                     # pytype:disable=bad-unpacking
                     if self.prioritized_replay:
                         assert self.beta_schedule is not None, \
-                                "BUG: should be LinearSchedule when self.prioritized_replay True"
+                               "BUG: should be LinearSchedule when self.prioritized_replay True"
                         experience = self.replay_buffer.sample(self.batch_size,
-                                                                beta=self.beta_schedule.value(self.num_timesteps),
-                                                                env=self._vec_normalize_env)
+                                                               beta=self.beta_schedule.value(self.num_timesteps),
+                                                               env=self._vec_normalize_env)
                         (obses_t, actions, rewards, obses_tp1, dones, weights, batch_idxes) = experience
                     else:
                         obses_t, actions, rewards, obses_tp1, dones = self.replay_buffer.sample(self.batch_size,
                                                                                                 env=self._vec_normalize_env)
                         #also sample from expert buffer
                         obses_t_exp, actions_exp, rewards_exp, obses_tp1_exp, dones_exp = self.expert_buffer.sample(self.batch_size,
-                                                                                                env=self._vec_normalize_env)                                                                  
+                                                                                                env=self._vec_normalize_env)
                         weights, batch_idxes = np.ones_like(rewards), None
                         weights_exp, batch_idxes_exp = np.ones_like(rewards_exp), None
-                        #print(obses_t.shape, actions.shape, rewards.shape, obses_tp1.shape, dones.shape)
                     # pytype:enable=bad-unpacking
 
                     if writer is not None:
@@ -227,12 +180,10 @@ class SQIL_DQN(DQN):
                                                                     run_metadata=run_metadata)
                         writer.add_summary(summary, self.num_timesteps)
                     else:
-                        print(obses_t.shape, obses_t_exp.shape, actions.shape, actions_exp.shape)
                         _, td_errors = self._train_step(np.append(obses_t, obses_t_exp, axis = 0), np.append(actions, actions_exp.flatten(), axis = 0),
                                                                     np.append(rewards, rewards_exp.flatten(), axis = 0), np.append(obses_tp1, obses_tp1_exp, axis = 0),
                                                                     np.append(obses_tp1, obses_tp1_exp, axis = 0),
-                                                                    np.append(dones.flatten(), dones_exp.flatten(), axis = 0), np.append(weights, weights_exp), sess=self.sess, options=run_options,
-                                                                    run_metadata=run_metadata)
+                                                                    np.append(dones.flatten(), dones_exp.flatten(), axis = 0), np.append(weights, weights_exp), sess=self.sess)
 
                     if self.prioritized_replay:
                         new_priorities = np.abs(td_errors) + self.prioritized_replay_eps
@@ -259,7 +210,7 @@ class SQIL_DQN(DQN):
                         logger.logkv("success rate", np.mean(episode_successes[-100:]))
                     logger.record_tabular("mean 100 episode reward", mean_100ep_reward)
                     logger.record_tabular("% time spent exploring",
-                                            int(100 * self.exploration.value(self.num_timesteps)))
+                                          int(100 * self.exploration.value(self.num_timesteps)))
                     logger.dump_tabular()
 
         callback.on_training_end()
