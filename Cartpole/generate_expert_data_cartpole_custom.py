@@ -3,6 +3,7 @@ import sys, gym, time
 import gym_cartpole
 import numpy as np
 import pandas as pd
+import os
 
 #
 # Test yourself as a learning agent! Pass environment name as a command-line argument, for example:
@@ -91,6 +92,10 @@ print("No keys pressed is taking action 0")
 
 for i in range(1):
     window_still_open = rollout(env)
-    df = pd.DataFrame(data = data)
-    df.to_csv("Cartpole/data/cartpole_custom_expert.csv", sep = ";")
+    save = input("save trajectory? (y/n): ")
+    if save == "y":
+        data_old = pd.read_csv("I:/Code/BachelorThesis/BachelorThesis/Cartpole/data/cartpole_custom_expert.csv", sep = ";").to_numpy()[:, 1:]
+        data_both = np.append(data_old, data, axis = 0)
+        df_both = pd.DataFrame(data = data_both)
+        df_both.to_csv("I:/Code/BachelorThesis/BachelorThesis/Cartpole/data/cartpole_custom_expert.csv", sep = ";")
     if window_still_open==False: break
