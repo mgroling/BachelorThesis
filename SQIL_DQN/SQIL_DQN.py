@@ -4,6 +4,7 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import gym
+import matplotlib.pyplot as plt
 
 from stable_baselines import logger
 from stable_baselines.common import tf_util, OffPolicyRLModel, SetVerbosity, TensorboardWriter
@@ -14,6 +15,8 @@ from stable_baselines.deepq.build_graph import build_train
 from stable_baselines.deepq.policies import DQNPolicy
 
 from stable_baselines import DQN
+
+from skimage.measure import block_reduce
 
 class SQIL_DQN(DQN):
     def intializeExpertBuffer(self, path, obs_len):
@@ -111,8 +114,8 @@ class SQIL_DQN(DQN):
                 else:
                     # Avoid changing the original ones
                     obs_, new_obs_, reward_ = obs, new_obs, rew
-                # Store transition in the replay buffer.
-                self.replay_buffer.add(obs_, action, reward_, new_obs_, float(done))
+                # Store transition in the replay buffer, but change reward to 0 (use it for plot later though)
+                self.replay_buffer.add(obs_, action, 0, new_obs_, float(done))
                 obs = new_obs
                 # Save the unnormalized observation
                 if self._vec_normalize_env is not None:
@@ -197,6 +200,8 @@ class SQIL_DQN(DQN):
                     # Update target network periodically.
                     self.update_target(sess=self.sess)
 
+                
+
                 if len(episode_rewards[-101:-1]) == 0:
                     mean_100ep_reward = -np.inf
                 else:
@@ -213,5 +218,26 @@ class SQIL_DQN(DQN):
                                           int(100 * self.exploration.value(self.num_timesteps)))
                     logger.dump_tabular()
 
+        episode_rewards = (list(avg_n(episode_rewards, 10)))
+        ts = pd.Series(episode_rewards, index = range(0, len(episode_rewards)))
+        ax = ts.plot()
+        ax.set_ylabel("average reward")
+        ax.set_xlabel("batch of 10 episodes")
+        plt.show()
+        
         callback.on_training_end()
         return self
+
+def avg_n(data, LEN):
+    """
+    taken from https://stackoverflow.com/questions/39814034/how-do-i-get-the-average-of-every-10-numbers-in-list-in-python
+    """
+    datasum = cnt = 0 
+    for num in data:
+        datasum += num
+        cnt += 1
+        if cnt == LEN: 
+            yield datasum / LEN
+            datasum = cnt = 0 
+    if cnt: 
+        yield datasum / cnt
