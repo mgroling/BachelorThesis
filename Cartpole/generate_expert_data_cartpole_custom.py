@@ -74,7 +74,7 @@ def rollout(env):
             data = np.append(data, np.append(np.array([obser]), np.array([[a]]), axis = 1), axis = 0)
 
         if r != 0:
-            print("reward %0.3f" % r)
+            print("Timestep " + str(total_timesteps) + "reward %0.3f" % r)
         total_reward += r
         window_still_open = env.render()
         if window_still_open==False: return False

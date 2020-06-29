@@ -19,12 +19,12 @@ class CustomDQNPolicy(FeedForwardPolicy):
 def main():
     env = gym.make('cartpole_custom-v0')
 
-    # model = SQIL_DQN(CustomDQNPolicy, env, verbose=1, buffer_size = 10000, double_q = False, seed = 42)
-    # model.intializeExpertBuffer("Cartpole/data/cartpole_custom_expert.csv", 4)
-    # model.learn(total_timesteps=100000)
-    # model.save("Cartpole/data/cartpole_custom-v0_agent")
+    model = SQIL_DQN(CustomDQNPolicy, env, verbose=1, buffer_size = 100000, double_q = False, seed = 37)
+    model.intializeExpertBuffer("Cartpole/data/cartpole_custom_expert.csv", 4)
+    model.learn(total_timesteps=100000)
+    model.save("Cartpole/data/cartpole_custom-v0_agent")
 
-    model = SQIL_DQN.load("Cartpole/data/cartpole_custom-v0_agent")
+    # model = SQIL_DQN.load("Cartpole/data/cartpole_custom-v0_agent")
 
     #test it
     reward_sum = 0.0
