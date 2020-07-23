@@ -19,18 +19,13 @@ from stable_baselines import DQN
 from skimage.measure import block_reduce
 
 class SQIL_DQN(DQN):
-    def intializeExpertBuffer(self, path, obs_len):
+    def intializeExpertBuffer(self, np_arr, obs_len):
         """
         Intializes the expert buffer with rewards all set to 1
-        path should be the path to a csv file with the following shape: (n, (observations, actions))
-        only the first n will be taken
         """
-        df = pd.read_csv(path, sep = ";")
-        ar = df.to_numpy()[:, 1:]
+        self.expert_buffer = ReplayBuffer(np_arr.shape[0]-1)
 
-        self.expert_buffer = ReplayBuffer(ar.shape[0])
-
-        self.expert_buffer.extend(ar[:-1, :obs_len], ar[:-1, obs_len:], np.ones(self.buffer_size), ar[1:, :obs_len], np.array([[False] for i in range(0, self.buffer_size)]))
+        self.expert_buffer.extend(np_arr[:-1, :obs_len], np_arr[:-1, obs_len:], np.ones(np_arr.shape[0]-1), np_arr[1:, :obs_len], np.array([[False] for i in range(0, np_arr.shape[0]-1)]))
 
     def learn(self, total_timesteps, callback=None, log_interval=100, tb_log_name="DQN",
               reset_num_timesteps=True, replay_wrapper=None):
