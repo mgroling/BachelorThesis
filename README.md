@@ -16,9 +16,13 @@ For implementing SQIL I used an Adaption of a DQN from stable-baselines and chan
 
 ## Cartpole
 
+### Introduction
+
+The ultimate goal of my BachelorThesis was to create a SQIL model to learn fish behaviour, however first I wanted to implement the model and get used to it. For this purpose I first wanted to use Cartpole as an environment to learn a SQIL model and to verify that my implementation of SQIl works correctly. However the standard cartpole scenario (from gym) seemed a little easy for an AI, (even with a very low amount of data a model would be pretty perfect) hence I made it a little bit harder. I did not let the pole start upwards but instead downwards, so the agent would have to get it up first and then balance it. However this cannot be done in one go, first one has to spin it up in direction and then the other, in order to get the pole upwards.
+
 ### Trajectories
 
-Trajectory files can be found in the data folder, they are either left_right or right_left, which means how the pole was swung up (left_right means that it was first swung up left and then right and vice versa)
+Trajectory files can be found in the data folder, they are either left_right or right_left, which means how the pole was swung up. (left_right means that it was first swung up left and then right and vice versa) All trajectories were created with the spawn of the cart in the center.
 
 There are 4 trajectories for left_right/right_left each. However I believe that right_left trajectories are a little bit worse, (I had a harder time at creating these, because for some reason it felt more natural to me to do left_right rather than right_left) which means that models trained on right_left could be worse because of that reason.
 
