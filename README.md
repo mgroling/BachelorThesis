@@ -1,5 +1,9 @@
 # BachelorThesis
 
+## SQIL
+
+Good paper explaining SQIL: https://openreview.net/pdf?id=S1xKd24twB
+
 ## Cartpole
 
 ### Trajectories
