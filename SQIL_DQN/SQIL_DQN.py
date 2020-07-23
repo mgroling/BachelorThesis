@@ -19,13 +19,23 @@ from stable_baselines import DQN
 from skimage.measure import block_reduce
 
 class SQIL_DQN(DQN):
-    def intializeExpertBuffer(self, np_arr, obs_len):
+    def _initializeExpertBuffer(self, np_arr, obs_len):
         """
-        Intializes the expert buffer with rewards all set to 1
+        not for public use!!! use initializeExpertBuffer instead!!!
         """
-        self.expert_buffer = ReplayBuffer(np_arr.shape[0]-1)
+        done = np.array([[False] for i in range(0, len(np_arr)-1)])
+        done[-1] = True
 
-        self.expert_buffer.extend(np_arr[:-1, :obs_len], np_arr[:-1, obs_len:], np.ones(np_arr.shape[0]-1), np_arr[1:, :obs_len], np.array([[False] for i in range(0, np_arr.shape[0]-1)]))
+        self.expert_buffer.extend(np_arr[:-1, :obs_len], np_arr[:-1, obs_len:], np.ones(len(np_arr)-1), np_arr[1:, :obs_len], done)
+    
+    def initializeExpertBuffer(self, np_arr_list, obs_len):
+        """
+        expects to be given a list of np_arrays (trajectories), sets all rewards to 1
+        """
+        self.expert_buffer = ReplayBuffer(sum([len(elem) for elem in np_arr_list]) - len(np_arr_list))
+
+        for elem in np_arr_list:
+            self._initializeExpertBuffer(elem, obs_len)
 
     def learn(self, total_timesteps, callback=None, log_interval=100, tb_log_name="DQN",
               reset_num_timesteps=True, replay_wrapper=None):

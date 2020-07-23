@@ -8,6 +8,8 @@ from stable_baselines.gail import ExpertDataset
 from stable_baselines import DQN
 from stable_baselines.gail import generate_expert_traj
 
+################# THIS DOCUMENT IS OLD AND NOT IN USE #######################
+
 class CustomDQNPolicy(FeedForwardPolicy):
     def __init__(self, *args, **kwargs):
         super(CustomDQNPolicy, self).__init__(*args, **kwargs,
