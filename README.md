@@ -2,7 +2,15 @@
 
 ## Cartpole
 
-### model naming of SQIL models
+### Trajectories
+
+Trajectory files can be found in the data folder, they are either left_right or right_left, which means how the pole was swung up (left_right means that it was first swung up left and then right and vice versa)
+
+There are 4 trajectories for left_right/right_left each. However I believe that right_left trajectories are a little bit worse, (I had a harder time at creating these, because for some reason it felt more natural to me to do left_right rather than right_left) which means that models trained on right_left could be worse because of that reason.
+
+### Model Naming
+
+#### Model Naming of SQIL models
 
 structure: w1_w2_w3_w4_w5_w6
 
@@ -22,7 +30,7 @@ lrAll means that all left_right trajectories were used\
 100k means that there were 100.000 exploration timesteps\
 random means that position of cartpole is random at the beginning (min = -2.3, max = 2.3)\
 
-### model naming of DQN/DQN_pretrained models
+#### Model Naming of DQN/DQN_pretrained models
 
 DQN_pretrained uses the same kind of naming as SQIL models.
 
