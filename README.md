@@ -4,9 +4,9 @@
 
 ## Introduction
 
-### Learn models of fish behavior by imitation learning via reinforcement learning
+### Learn models of fish behaviour by imitation learning via reinforcement learning
 
-The goal of this bachelor's thesis is to evaluate and potentially adapt a recently presented approach for imitation learning (IL) [1] for modelling fish behavior from existing fish motion data. To this end, the proposed method should be implemented (existing code could serve as a reference) where existing implementations of reinforcement learning algorithms can be used. A potential problem that could be encountered is that the IL method assumes a fully observable environment which is probably not the case for our problem. To overcome this issue, adaptations of the IL method should be developed, implemented, and evaluated.
+The goal of this bachelor's thesis is to evaluate and potentially adapt a recently presented approach for imitation learning (IL) [1] for modelling fish behaviour from existing fish motion data. To this end, the proposed method should be implemented (existing code could serve as a reference) where existing implementations of reinforcement learning algorithms can be used. A potential problem that could be encountered is that the IL method assumes a fully observable environment which is probably not the case for our problem. To overcome this issue, adaptations of the IL method should be developed, implemented, and evaluated.
 
 [1] Reddy, Dragan, Levine, SQIL: Imitation Learning via Reinforcement Learning with Sparse Rewards, ICLR 2020
 
