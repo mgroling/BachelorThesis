@@ -12,7 +12,7 @@ The goal of this bachelor's thesis is to evaluate and potentially adapt a recent
 
 Good paper explaining SQIL: https://openreview.net/pdf?id=S1xKd24twB
 
-For implementing SQIL I used an Adaption of a DQN from [stable-baselines](https://stable-baselines.readthedocs.io/en/master/) and changed it according to my needs
+For implementing SQIL I used an Adaption of a DQN from [stable-baselines](https://stable-baselines.readthedocs.io/en/master/) and changed it according to my needs.
 
 ## Cartpole
 
