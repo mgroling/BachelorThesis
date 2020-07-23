@@ -1,5 +1,7 @@
 # BachelorThesis
 
+
+
 ## Introduction
 
 ### Learn models of fish behavior by imitation learning via reinforcement learning
@@ -13,6 +15,24 @@ The goal of this bachelor's thesis is to evaluate and potentially adapt a recent
 Good paper explaining SQIL: https://openreview.net/pdf?id=S1xKd24twB
 
 For implementing SQIL I used an Adaption of a DQN from [stable-baselines](https://stable-baselines.readthedocs.io/en/master/) and changed it according to my needs.
+
+## Dependencies
+
+* Python 3.6.8
+* numpy
+* pandas
+* tensorflow 1.15.0
+* stable-baselines 2.10.0
+* [my custom cartpole environment](https://github.com/marc131183/gym-Cartpole)
+* [my SQIL_DQN implementation](https://github.com/marc131183/BachelorThesis/tree/master/SQIL_DQN)
+* gym
+* matplotlib.pyplot
+* os
+* sys
+* math
+* time
+* functools
+* skimage.measure.block_reduce
 
 ## Cartpole
 
