@@ -94,8 +94,10 @@ for i in range(1):
     window_still_open = rollout(env)
     save = input("save trajectory? (y/n): ")
     if save == "y":
-        data_old = pd.read_csv("I:/Code/BachelorThesis/BachelorThesis/Cartpole/data/cartpole_custom_expert.csv", sep = ";").to_numpy()[:, 1:]
-        data_both = np.append(data_old, data, axis = 0)
-        df_both = pd.DataFrame(data = data_both)
-        df_both.to_csv("I:/Code/BachelorThesis/BachelorThesis/Cartpole/data/cartpole_custom_expert.csv", sep = ";")
+        first_train = True
+        if not first_train:
+            data_old = pd.read_csv("I:/Code/BachelorThesis/BachelorThesis/Cartpole/data/trajectory_left_right.csv", sep = ";").to_numpy()[:, 1:]
+            data = np.append(data_old, data, axis = 0)
+        df = pd.DataFrame(data = data)
+        df.to_csv("I:/Code/BachelorThesis/BachelorThesis/Cartpole/data/trajectory_left_right_repeat.csv", sep = ";", index = False, header = False)
     if window_still_open==False: break
