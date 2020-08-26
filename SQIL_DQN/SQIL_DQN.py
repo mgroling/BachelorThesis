@@ -37,8 +37,26 @@ class SQIL_DQN(DQN):
         for elem in np_arr_list:
             self._initializeExpertBuffer(elem, obs_len)
 
+    def _initializeExpertBufferSep(self, obs, act):
+        """
+        not for public use!!! use initializeExpertBufferSep instead!!!
+        """
+        done = np.array([[False] for i in range(0, len(obs)-1)])
+        done[-1] = True
+
+        self.expert_buffer.extend(obs[:-1], act, np.ones(len(obs)-1), obs[1:], done)
+
+    def initializeExpertBufferSep(self, ar_list_obs, ar_list_act):
+        """
+        same as initializeExpertBuffer, however obs can now be of different shape than act
+        """
+        self.expert_buffer = ReplayBuffer(sum([len(elem) for elem in ar_list_act]))
+
+        for i in range(0, len(ar_list_act)):
+            self._initializeExpertBufferSep(ar_list_obs[i], ar_list_act[i])
+
     def learn(self, total_timesteps, callback=None, log_interval=100, tb_log_name="DQN",
-              reset_num_timesteps=True, replay_wrapper=None):
+              reset_num_timesteps=True, replay_wrapper=None, train_graph = True):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         callback = self._init_callback(callback)
@@ -223,12 +241,13 @@ class SQIL_DQN(DQN):
                                           int(100 * self.exploration.value(self.num_timesteps)))
                     logger.dump_tabular()
 
-        episode_rewards = (list(avg_n(episode_rewards, 10)))
-        ts = pd.Series(episode_rewards, index = range(0, len(episode_rewards)))
-        ax = ts.plot()
-        ax.set_ylabel("average reward")
-        ax.set_xlabel("batch of 10 episodes")
-        plt.show()
+        if train_graph:
+            episode_rewards = (list(avg_n(episode_rewards, 10)))
+            ts = pd.Series(episode_rewards, index = range(0, len(episode_rewards)))
+            ax = ts.plot()
+            ax.set_ylabel("average reward")
+            ax.set_xlabel("batch of 10 episodes")
+            plt.show()
         
         callback.on_training_end()
         return self

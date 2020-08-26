@@ -8,7 +8,6 @@ sys.path.insert(0, "SQIL_DQN")
 
 from SQIL_DQN import SQIL_DQN
 from stable_baselines import DQN
-from stable_baselines.deepq.policies import FeedForwardPolicy
 from stable_baselines.gail import ExpertDataset
 from functions import *
 
