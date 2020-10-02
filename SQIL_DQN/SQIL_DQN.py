@@ -6,6 +6,8 @@ import pandas as pd
 import gym
 import matplotlib.pyplot as plt
 
+from functions import getAngle
+
 from stable_baselines import logger
 from stable_baselines.common import tf_util, OffPolicyRLModel, SetVerbosity, TensorboardWriter
 from stable_baselines.common.vec_env import VecEnv
@@ -19,25 +21,7 @@ from stable_baselines import DQN
 from skimage.measure import block_reduce
 
 class SQIL_DQN(DQN):
-    def _initializeExpertBuffer(self, np_arr, obs_len):
-        """
-        not for public use!!! use initializeExpertBuffer instead!!!
-        """
-        done = np.array([[False] for i in range(0, len(np_arr)-1)])
-        done[-1] = True
-
-        self.expert_buffer.extend(np_arr[:-1, :obs_len], np_arr[:-1, obs_len:], np.ones(len(np_arr)-1), np_arr[1:, :obs_len], done)
-    
-    def initializeExpertBuffer(self, np_arr_list, obs_len):
-        """
-        expects to be given a list of np_arrays (trajectories), sets all rewards to 1
-        """
-        self.expert_buffer = ReplayBuffer(sum([len(elem) for elem in np_arr_list]) - len(np_arr_list))
-
-        for elem in np_arr_list:
-            self._initializeExpertBuffer(elem, obs_len)
-
-    def _initializeExpertBufferSep(self, obs, act):
+    def _initializeExpertBuffer(self, obs, act):
         """
         not for public use!!! use initializeExpertBufferSep instead!!!
         """
@@ -46,14 +30,14 @@ class SQIL_DQN(DQN):
 
         self.expert_buffer.extend(obs[:-1], act, np.ones(len(obs)-1), obs[1:], done)
 
-    def initializeExpertBufferSep(self, ar_list_obs, ar_list_act):
+    def initializeExpertBuffer(self, ar_list_obs, ar_list_act):
         """
         same as initializeExpertBuffer, however obs can now be of different shape than act
         """
         self.expert_buffer = ReplayBuffer(sum([len(elem) for elem in ar_list_act]))
 
         for i in range(0, len(ar_list_act)):
-            self._initializeExpertBufferSep(ar_list_obs[i], ar_list_act[i])
+            self._initializeExpertBuffer(ar_list_obs[i], ar_list_act[i])
 
     def learn(self, total_timesteps, callback=None, log_interval=100, tb_log_name="DQN",
               reset_num_timesteps=True, replay_wrapper=None, train_graph = True):
@@ -101,6 +85,9 @@ class SQIL_DQN(DQN):
                 obs_ = self._vec_normalize_env.get_original_obs().squeeze()
 
             for _ in range(total_timesteps):
+                if _ % 1000 == 0 and _ != 0:
+                    print("timestep",_,"finished")
+                    obs = self.env.reset()
                 # Take action and update exploration to the newest value
                 kwargs = {}
                 if not self.param_noise:
@@ -121,6 +108,42 @@ class SQIL_DQN(DQN):
                 with self.sess.as_default():
                     action = self.act(np.array(obs)[None], update_eps=update_eps, **kwargs)[0]
                 env_action = action
+
+                #check if next state (after action) would be outside of the field (CLIPPING)
+                env_state = self.env.get_state()
+                coords = self.env.action(env_action)
+                changed = False
+                if coords[0] < -0.49:
+                    coords[0] = -0.49
+                    changed = True
+                elif coords[0] > 0.49:
+                    coords[0] = 0.49
+                    changed = True
+
+                if coords[1] < -0.49:
+                    coords[1] = -0.49
+                    changed = True
+                elif coords[1] > 0.49:
+                    coords[1] = 0.49
+                    changed = True
+
+                if changed:
+                    dist = np.sqrt(np.power(coords[0] - env_state[0][0], 2) + np.power(coords[1] - env_state[0][1], 2))
+                    temp_x, temp_y = env_state[0][0] + 0.1*np.cos(env_state[0][2]), env_state[0][1] + 0.1*np.sin(env_state[0][2])
+                    look_vec = temp_x - env_state[0][0], temp_y - env_state[0][1]
+                    move_vec = coords[0] - env_state[0][0], coords[1] - env_state[0][1]
+                    turn = getAngle(look_vec, move_vec, mode = "radians")
+                    if turn > np.pi:
+                        turn = turn - 2*np.pi
+                    #convert to DQN output
+                    dist_turn = np.abs(self.env.turn_rate_bins - turn)
+                    dist_dist = np.abs(self.env.speed_bins - dist)
+
+                    bin_turn = np.argmin(dist_turn, axis = 0)
+                    bin_dist = np.argmin(dist_dist, axis = 0)
+
+                    env_action = action = bin_turn * len(self.env.speed_bins) + bin_dist
+
                 reset = False
                 new_obs, rew, done, info = self.env.step(env_action)
 

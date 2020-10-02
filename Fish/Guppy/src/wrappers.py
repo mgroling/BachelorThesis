@@ -10,50 +10,46 @@ class DiscreteMatrixActionWrapper(gym.ActionWrapper):
     def __init__(self, env, num_bins_turn_rate=10, num_bins_speed=10):
         super(DiscreteMatrixActionWrapper, self).__init__(env)
         assert isinstance(self.action_space, gym.spaces.Box)
-        max_turn_rate = self.action_space.high[0, 0]
+        max_turn_rate = np.pi/2
         self.turn_rate_bins = np.linspace(-max_turn_rate, max_turn_rate, num_bins_turn_rate)
-        max_speed = self.action_space.high[0, 1]
-        self.speed_bins = np.linspace(0, max_speed, num_bins_speed)
+        max_speed = 0.10
+        self.speed_bins = np.linspace(0.03, max_speed, num_bins_speed)
 
         self.action_space = gym.spaces.Discrete(num_bins_turn_rate*num_bins_speed)
 
     def action(self, action):
+        state = self.get_state()
+
         turn_rate = math.floor(action/len(self.speed_bins))
         speed = action%len(self.speed_bins)
-        return [self.turn_rate_bins[turn_rate], self.speed_bins[speed]]
+        turn, speed = self.turn_rate_bins[turn_rate], self.speed_bins[speed]
 
-    def reverse_action(self, action):
-            raise NotImplementedError
+        global_turn = state[0][2] + turn
+        global_x, global_y = state[0][0] + speed*np.cos(global_turn), state[0][1] + speed*np.sin(global_turn)
 
-class DiscreteMatrixActionWrapperCus(gym.ActionWrapper):
-    def __init__(self, env, max_turn_rate, max_speed, num_bins_turn_rate=10, num_bins_speed=10):
-        super(DiscreteMatrixActionWrapperCus, self).__init__(env)
-        assert isinstance(self.action_space, gym.spaces.Box)
-        max_turn_rate = max_turn_rate
-        self.turn_rate_bins = np.linspace(-max_turn_rate, max_turn_rate, num_bins_turn_rate)
-        max_speed = max_speed
-        self.speed_bins = np.linspace(0, max_speed, num_bins_speed)
+        # #clip action to -0.49, 0.49 (if outside moves to 0.49)
+        # if global_x < -0.49:
+        #     global_x = -0.49
+        # elif global_x > 0.49:
+        #     global_x = 0.49
 
-        self.action_space = gym.spaces.Discrete(num_bins_turn_rate*num_bins_speed)
-
-    def action(self, action):
-        turn_rate = math.floor(action/len(self.speed_bins))
-        speed = action%len(self.speed_bins)
-        turn_rate, speed = self.turn_rate_bins[turn_rate], self.speed_bins[speed]
-
-        global_turn = self.state[0][2] + turn_rate
-        global_x, global_y = self.state[0][0] + speed*np.cos(global_turn), self.state[0][1] + speed*np.sin(global_turn)
-
-        print("state:",self.state)
-        print("action:",turn_rate,speed)
-        print("next state should be:", global_x, global_y, global_turn)
-
-        # self.state = np.array([[global_x, global_y, global_turn], [self.state[0][0]], self.state[0][1], self.state[0][2]])
+        # if global_y < -0.49:
+        #     global_y = -0.49
+        # elif global_y > 0.49:
+        #     global_y = 0.49
 
         return [global_x, global_y]
 
     def reverse_action(self, action):
-        raise NotImplementedError
+            raise NotImplementedError
+
+class VectorActionWrapper(gym.ActionWrapper):
+    def __init__(self, env):
+        super(VectorActionWrapper, self).__init__(env)
+        self.action_space = gym.spaces.Box(low = np.array([0, -np.pi], dtype = np.float64), high = np.array([0.15, np.pi], dtype = np.float64), dtype = np.float64)
+
+    def action(self, action):
+        return action
 
 class RayCastingWrapper(gym.ObservationWrapper):
     def __init__(self, env, degrees=360, num_bins=36 * 2):
@@ -69,7 +65,6 @@ class RayCastingWrapper(gym.ObservationWrapper):
         self.obs_placeholder = np.empty(self.observation_space.shape)
 
     def observation(self, state):
-        self.state = state
         self.obs_placeholder[0] = compute_dist_bins(state[0], state[1:], self.sector_bounds, self.diagonal * 1.1)
         self.obs_placeholder[1] = ray_casting_walls(state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1)
         return self.obs_placeholder
