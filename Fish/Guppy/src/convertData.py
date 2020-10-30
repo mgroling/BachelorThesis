@@ -90,10 +90,14 @@ def getExpert(path, min_turn, min_dist, env):
 
 def getAll(paths, min_turn, min_dist, env):
     obs, act = [], []
+    cc = 0
     for path in paths:
+        temporary = pd.read_csv(path, sep = ";")
+        cc += len(temporary)
         temp_obs, temp_act = getExpert(path, min_turn, min_dist, env)
         obs.append(temp_obs)
         act.append(temp_act)
+    print("timesteps couznt", cc)
 
     return obs, act
 

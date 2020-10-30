@@ -32,7 +32,7 @@ class SQIL_DQN(DQN):
 
     def initializeExpertBuffer(self, ar_list_obs, ar_list_act):
         """
-        same as initializeExpertBuffer, however obs can now be of different shape than act
+        initizalize Expert Buffer
         """
         self.expert_buffer = ReplayBuffer(sum([len(elem) for elem in ar_list_act]))
 

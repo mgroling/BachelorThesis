@@ -61,6 +61,7 @@ class RayCastingWrapper(gym.ObservationWrapper):
         self.cutoff = np.radians(degrees) / 2.0
         self.sector_bounds = np.linspace(-self.cutoff, self.cutoff, num_bins + 1)
         self.ray_directions = np.linspace(-self.cutoff, self.cutoff, num_bins)
+        
         # TODO: is this faster than just recreating the array?
         self.obs_placeholder = np.empty(self.observation_space.shape)
 

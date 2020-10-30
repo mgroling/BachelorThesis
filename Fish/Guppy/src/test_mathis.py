@@ -23,7 +23,7 @@ from gym_guppy.guppies._robot import GlobalTargetRobot, TurnBoostRobot, PolarCoo
 import matplotlib.pyplot as plt
 
 def main():
-    env = TestEnv(max_steps_per_action = 200)
+    env = TestEnvMathis(max_steps_per_action = 200)
 
     env = RayCastingWrapper(env)
     # env = VectorActionWrapper(env)
@@ -38,44 +38,35 @@ def main():
 
     # model.learn(total_timesteps = 25000)
 
-    model_name = "DQN_256_128_25k_pi-4_7-100_03_10_20t_10s_norm"
+    # model.save("Fish/Guppy/models/DQN_256_128_25k_pi-4_7-100_DQNCLIP")
 
-    # model.save("Fish/Guppy/models/" + model_name)
-
-    model = SQIL_DQN.load("Fish/Guppy/models/" + model_name)
-
-    env.unwrapped.state_history = []
+    model = SQIL_DQN.load("Fish/Guppy/models/DQN_256_128_25k_pi-4_7-100_DQNCLIP")
 
     print("too many steps", env.too_many_steps)
 
     env.unwrapped.video_path = "Fish/Guppy/video"
+
+    #create trajectory with 10k timesteps
+    # trajectory = np.empty((10000, 6))
 
     """testing"""
     obs = env.reset()
     done = False
     timestep = 0
     while not done:
+        # trajectory[timestep] = np.array(env.get_state()).reshape((1, 6))
+
         action, _ = model.predict(obs)
-
         obs, reward, done, _ = env.step(action)
-
-        if len(env.state_history) > 25000:
-            break
-
         env.render()
         time.sleep(0.1)
         timestep += 1
 
-        # if timestep >= 100:
-        #     break
-
-    temp = env.state_history[0::5]
-    temp = temp[0:5000]
-
-    trajectory = np.concatenate(temp, axis = 0)
+        if timestep >= 100:
+            break
 
     # df = pd.DataFrame(data = trajectory, columns = ["fish0_x", "fish0_y", "fish0_ori", "fish1_x", "fish1_y", "fish1_ori"])
-    # df.to_csv("Fish/Guppy/trajectories/" + model_name + "_1.csv", index = False, sep = ";")
+    # df.to_csv("Fish/Guppy/trajectories/trajectory_0.csv", index = False, sep = ";")
 
     print("too many steps", env.too_many_steps)
     
