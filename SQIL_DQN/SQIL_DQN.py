@@ -22,9 +22,6 @@ from skimage.measure import block_reduce
 
 class SQIL_DQN(DQN):
     def _initializeExpertBuffer(self, obs, act):
-        """
-        not for public use!!! use initializeExpertBufferSep instead!!!
-        """
         done = np.array([[False] for i in range(0, len(obs)-1)])
         done[-1] = True
 
@@ -44,6 +41,9 @@ class SQIL_DQN(DQN):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         callback = self._init_callback(callback)
+
+        self.sample_preds = self.expert_buffer.sample(100)
+        self.sample_q = []
 
         with SetVerbosity(self.verbose), TensorboardWriter(self.graph, self.tensorboard_log, tb_log_name, new_tb_log) \
                 as writer:
@@ -72,6 +72,7 @@ class SQIL_DQN(DQN):
                                               initial_p=self.exploration_initial_eps,
                                               final_p=self.exploration_final_eps)
 
+            rewardPer1000T = []
             episode_rewards = [0.0]
             episode_successes = []
 
@@ -114,17 +115,17 @@ class SQIL_DQN(DQN):
                 coords = self.env.action(env_action)
                 changed = False
                 if coords[0] < -0.49:
-                    coords[0] = -0.49
+                    coords[0] = -0.47
                     changed = True
                 elif coords[0] > 0.49:
-                    coords[0] = 0.49
+                    coords[0] = 0.47
                     changed = True
 
                 if coords[1] < -0.49:
-                    coords[1] = -0.49
+                    coords[1] = -0.47
                     changed = True
                 elif coords[1] > 0.49:
-                    coords[1] = 0.49
+                    coords[1] = 0.47
                     changed = True
 
                 if changed:
@@ -143,6 +144,29 @@ class SQIL_DQN(DQN):
                     bin_dist = np.argmin(dist_dist, axis = 0)
 
                     env_action = action = bin_turn * len(self.env.speed_bins) + bin_dist
+
+                #for training plot/sampling
+                if train_graph:
+                    tempObservation = np.array(obs)
+                    tempVectorized_env = self._is_vectorized_observation(tempObservation, self.observation_space)
+
+                    tempObservation = tempObservation.reshape((-1,) + self.observation_space.shape)
+                    with self.sess.as_default():
+                        tempAction, tempQ_values, tempy = self.step_model.step(tempObservation)
+                        rewardPer1000T.append(tempQ_values[0, tempAction])
+
+                    if _ % 1000 == 0:
+                        self.sample_q.append([])
+                        for sample_nr in range(0, len(self.sample_preds)):
+                            obs_t_sample, actions_sample, rewards_sample, obses_tp1_sample, dones_sample = self.sample_preds
+
+                            obs_t_sample = np.array(obs_t_sample[sample_nr])
+                            tempVectorized_env = self._is_vectorized_observation(obs_t_sample, self.observation_space)
+
+                            obs_t_sample = obs_t_sample.reshape((-1,) + self.observation_space.shape)
+                            with self.sess.as_default():
+                                tempAction, tempQ_values, tempy = self.step_model.step(obs_t_sample)
+                                self.sample_q[-1].append(tempQ_values[0, actions_sample[sample_nr]])
 
                 reset = False
                 new_obs, rew, done, info = self.env.step(env_action)
@@ -265,26 +289,15 @@ class SQIL_DQN(DQN):
                     logger.dump_tabular()
 
         if train_graph:
-            episode_rewards = (list(avg_n(episode_rewards, 10)))
-            ts = pd.Series(episode_rewards, index = range(0, len(episode_rewards)))
-            ax = ts.plot()
-            ax.set_ylabel("average reward")
-            ax.set_xlabel("batch of 10 episodes")
+            every_nth = 1000
+            rewardPer1000T = np.mean(np.array(rewardPer1000T[:(len(rewardPer1000T)//every_nth)*every_nth]).reshape(-1, every_nth), axis = 1)
+            x = np.arange(0, total_timesteps/every_nth)
+            plt.plot(x, rewardPer1000T)
+            plt.show()
+
+            q_mean = np.mean(np.array(self.sample_q), axis = 1)
+            plt.plot(x, q_mean)
             plt.show()
         
         callback.on_training_end()
         return self
-
-def avg_n(data, LEN):
-    """
-    taken from https://stackoverflow.com/questions/39814034/how-do-i-get-the-average-of-every-10-numbers-in-list-in-python
-    """
-    datasum = cnt = 0 
-    for num in data:
-        datasum += num
-        cnt += 1
-        if cnt == LEN: 
-            yield datasum / LEN
-            datasum = cnt = 0 
-    if cnt: 
-        yield datasum / cnt

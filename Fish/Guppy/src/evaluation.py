@@ -3,12 +3,14 @@ from itertools import combinations
 import seaborn
 import numpy as np
 import pandas as pd
+import os
 from numpy import float32
 from numpy.linalg import norm
 from pandas import DataFrame
 import matplotlib.pyplot as plt
 
 ### DISCLAIMER: these functions are not my own!
+
 
 def normalize_series(x):
     """
@@ -17,12 +19,14 @@ def normalize_series(x):
     """
     return (x.T / norm(x, axis=-1)).T
 
+
 def calc_iid(a, b):
     """
     Given two series of poses - with X and Y coordinates of their positions as the first two elements -
     return the inter-individual distance (between the positions).
     """
     return norm(b[:, :2] - a[:, :2], axis=-1)
+
 
 def calc_tlvc(a, b, tau_min, tau_max):
     """
@@ -37,6 +41,7 @@ def calc_tlvc(a, b, tau_min, tau_max):
         ]
     )
 
+
 def calc_follow(a, b):
     """
     Given two series of poses - with X and Y coordinates of their positions as the first two elements -
@@ -45,6 +50,7 @@ def calc_follow(a, b):
     a_v = a[1:, :2] - a[:-1, :2]
     b_p = normalize_series(b[:-1, :2] - a[:-1, :2])
     return (a_v * b_p).sum(axis=-1)
+
 
 def calc_follow_iid(tracksets):
     follow = []
@@ -64,6 +70,7 @@ def calc_follow_iid(tracksets):
             "Follow": np.concatenate(follow, axis=0),
         }
     )
+
 
 def calc_tlvc_iid(tracksets, time_step, tau_seconds=(0.3, 1.3)):
     tau_min_seconds, tau_max_seconds = tau_seconds
@@ -88,19 +95,27 @@ def calc_tlvc_iid(tracksets, time_step, tau_seconds=(0.3, 1.3)):
         {"IID [cm]": np.concatenate(iid, axis=0), "TLVC": np.concatenate(tlvc, axis=0)}
     )
 
+
 def collect_tracksets(trajectory_paths):
     tracksets = []
     for path in trajectory_paths:
-        ar = pd.read_csv(path, sep = ";").to_numpy()
+        ar = pd.read_csv(path, sep=";").to_numpy()
 
         dic = {}
 
-        for i in range(0, ar.shape[1]//3):
-            trajectory = ar[:, i*3:i*3+3]
-            #convert orientation from radians to normalized orientation vector
-            ori_vec = normalize_series(np.array([trajectory[:, 0] + np.cos(trajectory[:, 2]), trajectory[:, 1] + np.cos(trajectory[:, 2])]).T)
-            #get new trajectory with x, y, ori_x, ori_y
-            temp = np.append(trajectory[:, [0, 1]], ori_vec, axis = 1)
+        for i in range(0, ar.shape[1] // 3):
+            trajectory = ar[:, i * 3 : i * 3 + 3]
+            # convert orientation from radians to normalized orientation vector
+            ori_vec = normalize_series(
+                np.array(
+                    [
+                        trajectory[:, 0] + np.cos(trajectory[:, 2]),
+                        trajectory[:, 1] + np.cos(trajectory[:, 2]),
+                    ]
+                ).T
+            )
+            # get new trajectory with x, y, ori_x, ori_y
+            temp = np.append(trajectory[:, [0, 1]], ori_vec, axis=1)
 
             dic[i] = temp
 
@@ -108,7 +123,8 @@ def collect_tracksets(trajectory_paths):
 
     return tracksets
 
-def plot_tankpositions(trackset, multipletracksets = False, size = (25, 25), path = None):
+
+def plot_tankpositions(trackset, multipletracksets=False, size=(25, 25), path=None):
     """
     Heatmap of fishpositions
     By Moritz Maxeiner
@@ -127,14 +143,17 @@ def plot_tankpositions(trackset, multipletracksets = False, size = (25, 25), pat
     ax.set_xlim(-0.5, 0.5)
     ax.set_ylim(-0.5, 0.5)
 
-    seaborn.kdeplot(x_pos, y_pos, n_levels=25, shade=True, ax=ax)
+    # print(x_pos.shape, y_pos.shape)
+
+    seaborn.kdeplot(x_pos, y_pos * (-1), n_levels=25, shade=True, ax=ax)
 
     if path is None:
         return fig
     else:
         fig.savefig(path)
 
-def plot_trajectories(tracks, size = (25, 25), path = None):
+
+def plot_trajectories(tracks, size=(25, 25), path=None):
     """
     Plots tank trajectory of fishes
     Expects one node per fish at max: tracks: [fish1_x, fish1_y, fish2_x, fish2_y,..]
@@ -147,19 +166,23 @@ def plot_trajectories(tracks, size = (25, 25), path = None):
     data = {
         fish: pd.DataFrame(
             {
-                "x": tracks[:,fish*2],
-                "y": tracks[:,fish*2 + 1],
+                "x": tracks[:, fish * 2],
+                "y": tracks[:, fish * 2 + 1],
             }
         )
         for fish in range(nfish)
     }
-    combined_data = pd.concat([data[fish].assign(Agent=f"Agent {fish}") for fish in data.keys()])
+    combined_data = pd.concat(
+        [data[fish].assign(Agent=f"Agent {fish}") for fish in data.keys()]
+    )
 
     fig, ax = plt.subplots(figsize=size)
 
     seaborn.set_style("white", {"axes.linewidth": 2, "axes.edgecolor": "black"})
 
-    seaborn.scatterplot(x="x", y="y", hue="Agent", linewidth=0, s=16, data=combined_data, ax=ax)
+    seaborn.scatterplot(
+        x="x", y="y", hue="Agent", linewidth=0, s=16, data=combined_data, ax=ax
+    )
     ax.set_xlim(-0.5, 0.5)
     ax.set_ylim(-0.5, 0.5)
     ax.invert_yaxis()
@@ -191,13 +214,21 @@ def plot_trajectories(tracks, size = (25, 25), path = None):
     else:
         fig.savefig(path)
 
+
 def get_indices(i):
     """
     returns right indices for fishpositions
     """
-    return (2*i, 2*i + 1)
+    return (2 * i, 2 * i + 1)
 
-def plot_tlvc_iid(tracks, time_step = (1000/30), tau_seconds=(0.3, 1.3), multipletracksets = False, path = None):
+
+def plot_tlvc_iid(
+    tracks,
+    time_step=(1000 / 30),
+    tau_seconds=(0.3, 1.3),
+    multipletracksets=False,
+    path=None,
+):
     """
     TLVC_IDD by Moritz Maxeiner
     Expects one node per fish at max: tracks: [fish1_x, fish1_y, fish2_x, fish2_y,..]
@@ -220,11 +251,16 @@ def plot_tlvc_iid(tracks, time_step = (1000/30), tau_seconds=(0.3, 1.3), multipl
             for i2 in range(i1 + 1, nfish):
                 f1_x, f1_y = get_indices(i1)
                 f2_x, f2_y = get_indices(i2)
-                iid.append(calc_iid(tracks[1 : -tau_max_frames + 1, f1_x:f1_y + 1], tracks[1 : -tau_max_frames + 1, f2_x:f2_y + 1]))
+                iid.append(
+                    calc_iid(
+                        tracks[1 : -tau_max_frames + 1, f1_x : f1_y + 1],
+                        tracks[1 : -tau_max_frames + 1, f2_x : f2_y + 1],
+                    )
+                )
                 iid.append(iid[-1])
 
-                a_v = tracks[1:, f1_x:f1_y + 1] - tracks[:-1, f1_x:f1_y + 1]
-                b_v = tracks[1:, f2_x:f2_y + 1] - tracks[:-1, f2_x:f2_y + 1]
+                a_v = tracks[1:, f1_x : f1_y + 1] - tracks[:-1, f1_x : f1_y + 1]
+                b_v = tracks[1:, f2_x : f2_y + 1] - tracks[:-1, f2_x : f2_y + 1]
                 tlvc.append(calc_tlvc(a_v, b_v, tau_min_frames, tau_max_frames))
                 tlvc.append(calc_tlvc(b_v, a_v, tau_min_frames, tau_max_frames))
     else:
@@ -236,11 +272,16 @@ def plot_tlvc_iid(tracks, time_step = (1000/30), tau_seconds=(0.3, 1.3), multipl
                 for i2 in range(i1 + 1, nfish):
                     f1_x, f1_y = get_indices(i1)
                     f2_x, f2_y = get_indices(i2)
-                    iid.append(calc_iid(trackset[1 : -tau_max_frames + 1, f1_x:f1_y + 1], trackset[1 : -tau_max_frames + 1, f2_x:f2_y + 1]))
+                    iid.append(
+                        calc_iid(
+                            trackset[1 : -tau_max_frames + 1, f1_x : f1_y + 1],
+                            trackset[1 : -tau_max_frames + 1, f2_x : f2_y + 1],
+                        )
+                    )
                     iid.append(iid[-1])
 
-                    a_v = trackset[1:, f1_x:f1_y + 1] - trackset[:-1, f1_x:f1_y + 1]
-                    b_v = trackset[1:, f2_x:f2_y + 1] - trackset[:-1, f2_x:f2_y + 1]
+                    a_v = trackset[1:, f1_x : f1_y + 1] - trackset[:-1, f1_x : f1_y + 1]
+                    b_v = trackset[1:, f2_x : f2_y + 1] - trackset[:-1, f2_x : f2_y + 1]
                     tlvc.append(calc_tlvc(a_v, b_v, tau_min_frames, tau_max_frames))
                     tlvc.append(calc_tlvc(b_v, a_v, tau_min_frames, tau_max_frames))
 
@@ -255,13 +296,14 @@ def plot_tlvc_iid(tracks, time_step = (1000/30), tau_seconds=(0.3, 1.3), multipl
     grid.fig.set_figwidth(9)
     grid.fig.set_figheight(6)
     grid.fig.subplots_adjust(top=0.9)
-    
+
     if path is None:
         return grid.fig
     else:
         grid.fig.savefig(path)
 
-def plot_follow_iid(tracks, multipletracksets = False, path = None):
+
+def plot_follow_iid(tracks, multipletracksets=False, path=None):
     """
     plots fancy graph with follow and iid, only use with center values
     Expects one node per fish at max: tracks: [fish1_x, fish1_y, fish2_x, fish2_y,..]
@@ -280,11 +322,18 @@ def plot_follow_iid(tracks, multipletracksets = False, path = None):
             for i2 in range(i1 + 1, nfish):
                 f1_x, f1_y = get_indices(i1)
                 f2_x, f2_y = get_indices(i2)
-                iid.append(calc_iid(tracks[:-1, f1_x:f1_y + 1], tracks[:-1, f2_x:f2_y + 1]))
-                # iid.append(iid[-1])
+                print(tracks[:-1, f1_x : f1_y + 1].shape)
+                iid.append(
+                    calc_iid(tracks[:-1, f1_x : f1_y + 1], tracks[:-1, f2_x : f2_y + 1])
+                )
+                iid.append(iid[-1])
 
-                # follow.append(calc_follow(tracks[:, f1_x:f1_y + 1], tracks[:, f2_x:f2_y + 1]))
-                follow.append(calc_follow(tracks[:, f2_x:f2_y + 1], tracks[:, f1_x:f1_y + 1]))
+                follow.append(
+                    calc_follow(tracks[:, f1_x : f1_y + 1], tracks[:, f2_x : f2_y + 1])
+                )
+                follow.append(
+                    calc_follow(tracks[:, f2_x : f2_y + 1], tracks[:, f1_x : f1_y + 1])
+                )
     else:
         for trackset in tracks:
             assert trackset.shape[-1] % 2 == 0
@@ -293,14 +342,26 @@ def plot_follow_iid(tracks, multipletracksets = False, path = None):
                 for i2 in range(i1 + 1, nfish):
                     f1_x, f1_y = get_indices(i1)
                     f2_x, f2_y = get_indices(i2)
-                    iid.append(calc_iid(trackset[:-1, f1_x:f1_y + 1], trackset[:-1, f2_x:f2_y + 1]))
-                    iid.append(iid[-1])
+                    iid.append(
+                        calc_iid(
+                            trackset[:-1, f1_x : f1_y + 1],
+                            trackset[:-1, f2_x : f2_y + 1],
+                        )
+                    )
+                    # iid.append(iid[-1])
 
-                    follow.append(calc_follow(trackset[:, f1_x:f1_y + 1], trackset[:, f2_x:f2_y + 1]))
-                    follow.append(calc_follow(trackset[:, f2_x:f2_y + 1], trackset[:, f1_x:f1_y + 1]))
+                    follow.append(
+                        calc_follow(
+                            trackset[:, f1_x : f1_y + 1], trackset[:, f2_x : f2_y + 1]
+                        )
+                    )
+                    # follow.append(calc_follow(trackset[:, f2_x:f2_y + 1], trackset[:, f1_x:f1_y + 1]))
 
     follow_iid_data = pd.DataFrame(
-        {"IID [m]": np.concatenate(iid, axis=0), "Follow": np.concatenate(follow, axis=0)}
+        {
+            "IID [m]": np.concatenate(iid, axis=0),
+            "Follow": np.concatenate(follow, axis=0),
+        }
     )
 
     grid = seaborn.jointplot(
@@ -315,20 +376,31 @@ def plot_follow_iid(tracks, multipletracksets = False, path = None):
     else:
         grid.fig.savefig(path)
 
-def plot_dist_ori(paths, size = (18, 18), path = None):
-    ar = pd.read_csv(paths[0], sep = ";").to_numpy()
-    distances = np.sqrt(np.power(ar[1:, 0] - ar[:-1, 0], 2) + np.power(ar[1:, 1] - ar[:-1, 1], 2))
+
+def plot_dist_ori(paths, size=(18, 18), path=None):
+    ar = pd.read_csv(paths[0], sep=";").to_numpy()
+    distances = np.sqrt(
+        np.power(ar[1:, 0] - ar[:-1, 0], 2) + np.power(ar[1:, 1] - ar[:-1, 1], 2)
+    )
     orientations = ar[1:, 2] - ar[:-1, 2]
 
     fig_angular, ax = plt.subplots(figsize=size)
     fig_angular.subplots_adjust(top=0.93)
     ax.set_xlim(-np.pi, np.pi)
-    seaborn.distplot(pd.Series(orientations, name="Angular movement"), ax=ax, hist_kws={"rwidth":0.9, "color":"y"})
+    seaborn.distplot(
+        pd.Series(orientations, name="Angular movement"),
+        ax=ax,
+        hist_kws={"rwidth": 0.9, "color": "y"},
+    )
 
     fig_linear, ax = plt.subplots(figsize=size)
     fig_linear.subplots_adjust(top=0.93)
     # ax.set_xlim(-20, 20)
-    seaborn.distplot(pd.Series(distances, name="Linear movement"), ax=ax, hist_kws={"rwidth":0.9, "color":"y"})
+    seaborn.distplot(
+        pd.Series(distances, name="Linear movement"),
+        ax=ax,
+        hist_kws={"rwidth": 0.9, "color": "y"},
+    )
 
     if path is None:
         return fig_angular, fig_linear
@@ -336,26 +408,53 @@ def plot_dist_ori(paths, size = (18, 18), path = None):
         fig_angular.savefig(path + "fig_angular.png")
         fig_linear.savefig(path + "fig_linear.png")
 
-def createPlots(paths, folder_path, multipletracksets = False):
+
+def createPlots(paths, folder_path, multipletracksets=False):
     if not multipletracksets:
         trackset = collect_tracksets(paths)
-        plot_tankpositions(trackset, size = (18, 18), path = folder_path + "tankpositions_all.png")
+        plot_tankpositions(
+            trackset, size=(18, 18), path=folder_path + "tankpositions_all.png"
+        )
 
-        trajectories = np.empty((len(trackset[0][0]), len(trackset[0])*2))
+        trajectories = np.empty((len(trackset[0][0]), len(trackset[0]) * 2))
         for track in trackset:
             i = 0
             for value in track.values():
-                trajectories[:, [i*2, i*2+1]] = value[:, [0, 1]]
+                trajectories[:, [i * 2, i * 2 + 1]] = value[:, [0, 1]]
                 i += 1
-        plot_trajectories(trajectories, size = (18, 18), path = folder_path + "trajectories_all.png")
-        plot_trajectories(trajectories[:, 0:2], size = (18, 18), path = folder_path + "trajectories_agent_0.png")
-        plot_trajectories(trajectories[:, 2:4], size = (18, 18), path = folder_path + "trajectories_agent_1.png")
-        plot_follow_iid(trajectories, path = folder_path + "follow_iid.png")
-        plot_tlvc_iid(trajectories, time_step = (1000/20), path = folder_path + "tlvc_iid.png")
+        plot_trajectories(
+            trajectories, size=(18, 18), path=folder_path + "trajectories_all.png"
+        )
+        plot_trajectories(
+            trajectories[:, 0:2],
+            size=(18, 18),
+            path=folder_path + "trajectories_agent_0.png",
+        )
+        plot_trajectories(
+            trajectories[:, 2:4],
+            size=(18, 18),
+            path=folder_path + "trajectories_agent_1.png",
+        )
+        plot_follow_iid(trajectories, path=folder_path + "follow_iid.png")
+        plot_tlvc_iid(
+            trajectories, time_step=(1000 / 20), path=folder_path + "tlvc_iid.png"
+        )
 
-        plot_dist_ori(paths, path = folder_path)
+        plot_dist_ori(paths, path=folder_path)
 
     else:
         pass
 
-createPlots(["Fish/Guppy/trajectories/DQN_256_128_25k_pi-4_7-100_03_10_20t_10s_norm.csv"], "Fish/Guppy/plots/DQN_256_128_25k_pi-4_7-100_03_10_20t_10s_norm/")
+
+if __name__ == "__main__":
+    # data_names = [elem for elem in os.listdir("Fish/Guppy/reducedData")]
+
+    # for elem in data_names:
+    #     print(elem)
+    #     os.mkdir("Fish/Guppy/plots/liveData/" + elem[:-4])
+    #     createPlots(["Fish/Guppy/reducedData/" + elem], "Fish/Guppy/plots/liveData/" + elem[:-4] + "/")
+
+    createPlots(
+        ["Fish/Guppy/trajectories/DQN_22_12_2020_03_1models_det.csv"],
+        "Fish/Guppy/plots/DQN_22_12_2020_03_1models_det/",
+    )

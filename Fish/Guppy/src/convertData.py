@@ -2,14 +2,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+import os
 sys.path.append("gym-guppy")
 from gym_guppy.envs._configurable_guppy_env import ConfigurableGuppyEnv
 from gym_guppy.wrappers.observation_wrapper import RayCastingWrapper
 from wrappers import DiscreteMatrixActionWrapper
 
 def getExpert(path, min_turn, min_dist, env):
-    #we only need robo_x, robo_y, robo_orientation_radians, fish_x, fish_y, fish_orientation_radians
-    ar = pd.read_csv(path).to_numpy()[:, [5,6,8,11,12,14]].astype(np.float64)
+    #we only need fish_x, fish_y, fish_orientation_radians, robo_x, robo_y, robo_orientation_radians
+    ar = pd.read_csv(path).to_numpy()[:, [11,12,14,5,6,8]].astype(np.float64)
     #convert x,y from cm to m
     ar[:, [0,1,3,4]] = ar[:, [0,1,3,4]] / 100
     #convert x,y from (0,1) to (-0.5,0.5)
@@ -97,17 +98,37 @@ def getAll(paths, min_turn, min_dist, env):
         temp_obs, temp_act = getExpert(path, min_turn, min_dist, env)
         obs.append(temp_obs)
         act.append(temp_act)
-    print("timesteps couznt", cc)
+    print("timesteps count", cc)
 
     return obs, act
 
-def main():
-    env = ConfigurableGuppyEnv()
-    env = DiscreteMatrixActionWrapper(env)
-    env = RayCastingWrapper(env)
-    # convertFile("Fish/Guppy/data/test_robotracker.csv", env)
+def reduceData(path, target_path):
+    """
+    deletes columns from data, such that we can easily use it in evaluation
+    """
+    #we only need robo_x, robo_y, robo_orientation_radians, fish_x, fish_y, fish_orientation_radians
+    ar = pd.read_csv(path).to_numpy()[:, [5,6,8,11,12,14]].astype(np.float64)
+    #convert x,y from cm to m
+    ar[:, [0,1,3,4]] = ar[:, [0,1,3,4]] / 100
+    #convert x,y from (0,1) to (-0.5,0.5)
+    ar[:, [0,1,3,4]] = ar[:, [0,1,3,4]] - 0.5
+    #convert orientation from 0, 2pi to -pi,pi
+    ar[:, [2,5]] = np.where(ar[:, [2,5]] > np.pi, ar[:, [2,5]] - 2*np.pi, ar[:, [2,5]])
 
-    getExpert("Fish/Guppy/data/test_robotracker.csv", np.pi/4, 0.1)
+    df = pd.DataFrame(data = ar, columns = ["fish0_x", "fish0_y", "fish0_ori", "fish1_x", "fish1_y", "fish1_ori"])
+    df.to_csv(target_path, index = False, sep = ";")
+
+def main():
+    # env = ConfigurableGuppyEnv()
+    # env = DiscreteMatrixActionWrapper(env)
+    # env = RayCastingWrapper(env)
+    # # convertFile("Fish/Guppy/data/test_robotracker.csv", env)
+
+    # getExpert("Fish/Guppy/data/test_robotracker.csv", np.pi/4, 0.1)
+
+    data_paths = ["Fish/Guppy/data/" + elem for elem in os.listdir("Fish/Guppy/data")]
+    for path in data_paths:
+        reduceData(path, "Fish/Guppy/reducedData/" + path[16:])
     
 if __name__ == "__main__":
     main()
