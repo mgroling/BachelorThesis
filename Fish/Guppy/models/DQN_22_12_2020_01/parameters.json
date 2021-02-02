@@ -1,1 +1,0 @@
-{"degrees": 360, "num_bins_rays": 72, "turn_bins": 20, "min_turn": -1.5707963267948966, "max_turn": 1.5707963267948966, "speed_bins": 10, "min_speed": 0.03, "max_speed": 0.1, "layer_norm": true, "layers": [256, 128], "training_timesteps": 100000, "exp_min_turn": 0.7853981633974483, "exp_min_dist": 0.07, "explore_ratio": 0.5}

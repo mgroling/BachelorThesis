@@ -15,12 +15,13 @@ from gym_guppy import (
     VelocityControlledAgent,
     GlobalTargetRobot,
 )
+from gym_guppy.guppies._adaptive_agent import AdaptiveAgent
 from gym_guppy.tools.math import ray_casting_walls, compute_dist_bins
 
 
-class MarcGuppy(Guppy, TurnSpeedAgent):
+class MarcGuppy(Guppy, GlobalTargetRobot):
     def __init__(self, model_path, **kwargs):
-        super().__init__(**kwargs)
+        super(MarcGuppy, self).__init__(**kwargs)
         self._model = DQN.load(model_path + "model")
         dic = loadConfig(model_path + "parameters.json")
 
@@ -28,7 +29,7 @@ class MarcGuppy(Guppy, TurnSpeedAgent):
         num_bins = dic["num_bins_rays"]
         num_bins_turn_rate = dic["turn_bins"]
         num_bins_speed = dic["speed_bins"]
-        min_turn_rate = dic["min_turn"]
+        min_turn_rate = -dic["max_turn"]
         max_turn_rate = dic["max_turn"]
         min_speed = dic["min_speed"]
         max_speed = dic["max_speed"]
@@ -46,22 +47,63 @@ class MarcGuppy(Guppy, TurnSpeedAgent):
         self.obs_placeholder = np.empty((2, num_bins))
 
     def compute_next_action(self, state: np.ndarray, kd_tree: cKDTree = None):
-        self.obs_placeholder[0] = compute_dist_bins(
-            state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
-        )
-        self.obs_placeholder[1] = ray_casting_walls(
-            state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1
-        )
+        if self._target is None:
+            temp = state.copy()
+            state[0] = temp[1]
+            state[1] = temp[0]
+            self.obs_placeholder[0] = compute_dist_bins(
+                state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
+            )
+            self.obs_placeholder[1] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1
+            )
 
-        action, _ = self._model.predict(self.obs_placeholder, deterministic=True)
+            action, _ = self._model.predict(self.obs_placeholder, deterministic=True)
 
-        turn_rate = math.floor(action / len(self._speed_bins))
-        speed = action % len(self._speed_bins)
-        turn, speed = self._turn_rate_bins[turn_rate], self._speed_bins[speed]
+            turn_rate = math.floor(action / len(self._speed_bins))
+            speed = action % len(self._speed_bins)
+            turn, speed = self._turn_rate_bins[turn_rate], self._speed_bins[speed]
 
-        self.turn = turn * 0.1
-        self.speed = speed * 1.5
+            global_turn = state[0][2] + turn
+            global_x, global_y = (
+                state[0][0] + speed * np.cos(global_turn),
+                state[0][1] + speed * np.sin(global_turn),
+            )
 
+            # self.turn = turn * 0.1
+            # self.speed = speed * 1.5
+
+            self._target = np.array([global_x, global_y])
+        elif np.sum(np.abs(self._target - state[1, :2])) < 0.02:
+            temp = state.copy()
+            state[0] = temp[1]
+            state[1] = temp[0]
+            self.obs_placeholder[0] = compute_dist_bins(
+                state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
+            )
+            self.obs_placeholder[1] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1
+            )
+
+            action, _ = self._model.predict(self.obs_placeholder, deterministic=True)
+
+            turn_rate = math.floor(action / len(self._speed_bins))
+            speed = action % len(self._speed_bins)
+            turn, speed = self._turn_rate_bins[turn_rate], self._speed_bins[speed]
+
+            global_turn = state[0][2] + turn
+            global_x, global_y = (
+                state[0][0] + speed * np.cos(global_turn),
+                state[0][1] + speed * np.sin(global_turn),
+            )
+
+            # self.turn = turn * 0.1
+            # self.speed = speed * 1.5
+
+            self._target = np.array([global_x, global_y])
+
+    def step(self, time_step):
+        pass
 
 def saveConfig(path, dic):
     with open(path, "w+") as f:
@@ -71,27 +113,3 @@ def saveConfig(path, dic):
 def loadConfig(path):
     with open(path, "r") as f:
         return json.load(f)
-
-
-def main():
-    dic = {
-        "degrees": 360,
-        "num_bins_rays": 72,
-        "turn_bins": 20,
-        "min_turn": -np.pi / 2,
-        "max_turn": np.pi / 2,
-        "speed_bins": 10,
-        "min_speed": 0.03,
-        "max_speed": 0.1,
-        "layer_norm": True,
-        "layers": [256, 128],
-        "training_timesteps": 75000,
-        "exp_min_turn": np.pi / 4,
-        "exp_min_dist": 0.07,
-        "explore_ratio": 0.5,
-    }
-    saveConfig("Fish/Guppy/models/DQN_22_12_2020_03.json", dic)
-
-
-if __name__ == "__main__":
-    main()

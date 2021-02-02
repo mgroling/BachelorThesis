@@ -3,32 +3,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import os
+
 sys.path.append("gym-guppy")
 from gym_guppy.envs._configurable_guppy_env import ConfigurableGuppyEnv
 from gym_guppy.wrappers.observation_wrapper import RayCastingWrapper
 from wrappers import DiscreteMatrixActionWrapper
 
+
 def getExpert(path, min_turn, min_dist, env):
-    #we only need fish_x, fish_y, fish_orientation_radians, robo_x, robo_y, robo_orientation_radians
-    ar = pd.read_csv(path).to_numpy()[:, [11,12,14,5,6,8]].astype(np.float64)
-    #convert x,y from cm to m
-    ar[:, [0,1,3,4]] = ar[:, [0,1,3,4]] / 100
-    #convert x,y from (0,1) to (-0.5,0.5)
-    ar[:, [0,1,3,4]] = ar[:, [0,1,3,4]] - 0.5
-    #convert orientation from 0, 2pi to -pi,pi
-    ar[:, [2,5]] = np.where(ar[:, [2,5]] > np.pi, ar[:, [2,5]] - 2*np.pi, ar[:, [2,5]])
+    # we only need fish_x, fish_y, fish_orientation_radians, robo_x, robo_y, robo_orientation_radians
+    ar = pd.read_csv(path).to_numpy()[:, [11, 12, 14, 5, 6, 8]].astype(np.float64)
+    # convert x,y from cm to m
+    ar[:, [0, 1, 3, 4]] = ar[:, [0, 1, 3, 4]] / 100
+    # convert x,y from (0,1) to (-0.5,0.5)
+    ar[:, [0, 1, 3, 4]] = ar[:, [0, 1, 3, 4]] - 0.5
+    # convert orientation from 0, 2pi to -pi,pi
+    ar[:, [2, 5]] = np.where(
+        ar[:, [2, 5]] > np.pi, ar[:, [2, 5]] - 2 * np.pi, ar[:, [2, 5]]
+    )
 
-    #calculate turn and dist for each timestep
-    turn_dist = np.empty((len(ar)-1, 2))
+    # calculate turn and dist for each timestep
+    turn_dist = np.empty((len(ar) - 1, 2))
     # (orientation{t} - orientation{t-1}) = turn, also make it take the "shorter" turn (the shorter angle)
-    turn_dist[:, 0] = (ar[1:, 2] - ar[:-1, 2])
-    turn_dist[:, 0] = np.where(turn_dist[:, 0] < -np.pi, turn_dist[:, 0] + 2*np.pi, turn_dist[:, 0])
-    turn_dist[:, 0] = np.where(turn_dist[:, 0] > np.pi, turn_dist[:, 0] - 2*np.pi, turn_dist[:, 0])
+    turn_dist[:, 0] = ar[1:, 2] - ar[:-1, 2]
+    turn_dist[:, 0] = np.where(
+        turn_dist[:, 0] < -np.pi, turn_dist[:, 0] + 2 * np.pi, turn_dist[:, 0]
+    )
+    turn_dist[:, 0] = np.where(
+        turn_dist[:, 0] > np.pi, turn_dist[:, 0] - 2 * np.pi, turn_dist[:, 0]
+    )
     # sqrt((x{t}-x{t-1})**2 + (y{t}-y{t-1})**2) = dist
-    turn_dist[:, 1] = np.sqrt(np.array(np.power(ar[1:, 0]-ar[:-1, 0], 2) + np.power(ar[1:, 1]-ar[:-1, 1], 2), dtype = np.float64))
+    turn_dist[:, 1] = np.sqrt(
+        np.array(
+            np.power(ar[1:, 0] - ar[:-1, 0], 2) + np.power(ar[1:, 1] - ar[:-1, 1], 2),
+            dtype=np.float64,
+        )
+    )
 
-    #summarize movement that was too small
-    keep_rows = np.zeros((len(ar)), dtype = bool)
+    # summarize movement that was too small
+    keep_rows = np.zeros((len(ar)), dtype=bool)
     keep_rows[0] = True
     cur_turn = 0
     cur_dist = 0
@@ -37,49 +50,56 @@ def getExpert(path, min_turn, min_dist, env):
         cur_dist += turn_dist[i, 1]
 
         if cur_turn > min_turn or cur_turn < -min_turn or cur_dist > min_dist:
-            keep_rows[i+1] = True
+            keep_rows[i + 1] = True
             cur_turn = 0
             cur_dist = 0
 
-    #only take timesteps, that give a good enough change from t-1 to t
+    # only take timesteps, that give a good enough change from t-1 to t
     ar = ar[keep_rows]
 
     # # plot tracks
     # plt.plot(ar[:, 0], ar[:, 1])
     # plt.show()
 
-    #calculate turn and dist for each timestep
-    turn_dist = np.empty((len(ar)-1, 2))
+    # calculate turn and dist for each timestep
+    turn_dist = np.empty((len(ar) - 1, 2))
     # (orientation{t} - orientation{t-1}) = turn, also make it take the "shorter" turn (the shorter angle)
-    turn_dist[:, 0] = (ar[1:, 2] - ar[:-1, 2])
-    turn_dist[:, 0] = np.where(turn_dist[:, 0] < -np.pi, turn_dist[:, 0] + 2*np.pi, turn_dist[:, 0])
-    turn_dist[:, 0] = np.where(turn_dist[:, 0] > np.pi, turn_dist[:, 0] - 2*np.pi, turn_dist[:, 0])
+    turn_dist[:, 0] = ar[1:, 2] - ar[:-1, 2]
+    turn_dist[:, 0] = np.where(
+        turn_dist[:, 0] < -np.pi, turn_dist[:, 0] + 2 * np.pi, turn_dist[:, 0]
+    )
+    turn_dist[:, 0] = np.where(
+        turn_dist[:, 0] > np.pi, turn_dist[:, 0] - 2 * np.pi, turn_dist[:, 0]
+    )
     # sqrt((x{t}-x{t-1})**2 + (y{t}-y{t-1})**2) = dist
-    turn_dist[:, 1] = np.sqrt(np.array(np.power(ar[1:, 0]-ar[:-1, 0], 2) + np.power(ar[1:, 1]-ar[:-1, 1], 2), dtype = np.float64))
+    turn_dist[:, 1] = np.sqrt(
+        np.array(
+            np.power(ar[1:, 0] - ar[:-1, 0], 2) + np.power(ar[1:, 1] - ar[:-1, 1], 2),
+            dtype=np.float64,
+        )
+    )
 
     # plt.hist(turn_dist[:, 0])
     # plt.show()
     # plt.hist(turn_dist[:, 1])
     # plt.show()
 
-
-    #Convert raw turn/dist values to bin format
-    #get distance from each turn/speed to each bin of the corresponding type
+    # Convert raw turn/dist values to bin format
+    # get distance from each turn/speed to each bin of the corresponding type
     dist_turn = np.abs(turn_dist[:, 0, np.newaxis] - env.turn_rate_bins)
     dist_dist = np.abs(turn_dist[:, 1, np.newaxis] - env.speed_bins)
 
-    #get indice with minimal distance (chosen action)
-    bin_turn = np.argmin(dist_turn, axis = 1)
-    bin_dist = np.argmin(dist_dist, axis = 1)
+    # get indice with minimal distance (chosen action)
+    bin_turn = np.argmin(dist_turn, axis=1)
+    bin_dist = np.argmin(dist_dist, axis=1)
 
     chosen_action = bin_turn * len(env.speed_bins) + bin_dist
-
-
-    #Get Raycasts
-    #remove last row, cause we dont have turn/dist for it
+    
+    # Get Raycasts
+    # remove last row, cause we dont have turn/dist for it
     ar = ar[:-1]
 
-    #reshape data in form of guppy-env output
+    # reshape data in form of guppy-env output
     ar = ar.reshape(len(ar), 2, 3)
 
     rays = np.empty((len(ar), 2, len(env.ray_directions)))
@@ -89,11 +109,12 @@ def getExpert(path, min_turn, min_dist, env):
 
     return rays, chosen_action.reshape((len(chosen_action), 1))
 
+
 def getAll(paths, min_turn, min_dist, env):
     obs, act = [], []
     cc = 0
     for path in paths:
-        temporary = pd.read_csv(path, sep = ";")
+        temporary = pd.read_csv(path, sep=";")
         cc += len(temporary)
         temp_obs, temp_act = getExpert(path, min_turn, min_dist, env)
         obs.append(temp_obs)
@@ -102,21 +123,28 @@ def getAll(paths, min_turn, min_dist, env):
 
     return obs, act
 
+
 def reduceData(path, target_path):
     """
     deletes columns from data, such that we can easily use it in evaluation
     """
-    #we only need robo_x, robo_y, robo_orientation_radians, fish_x, fish_y, fish_orientation_radians
-    ar = pd.read_csv(path).to_numpy()[:, [5,6,8,11,12,14]].astype(np.float64)
-    #convert x,y from cm to m
-    ar[:, [0,1,3,4]] = ar[:, [0,1,3,4]] / 100
-    #convert x,y from (0,1) to (-0.5,0.5)
-    ar[:, [0,1,3,4]] = ar[:, [0,1,3,4]] - 0.5
-    #convert orientation from 0, 2pi to -pi,pi
-    ar[:, [2,5]] = np.where(ar[:, [2,5]] > np.pi, ar[:, [2,5]] - 2*np.pi, ar[:, [2,5]])
+    # we only need robo_x, robo_y, robo_orientation_radians, fish_x, fish_y, fish_orientation_radians
+    ar = pd.read_csv(path).to_numpy()[:, [5, 6, 8, 11, 12, 14]].astype(np.float64)
+    # convert x,y from cm to m
+    ar[:, [0, 1, 3, 4]] = ar[:, [0, 1, 3, 4]] / 100
+    # convert x,y from (0,1) to (-0.5,0.5)
+    ar[:, [0, 1, 3, 4]] = ar[:, [0, 1, 3, 4]] - 0.5
+    # convert orientation from 0, 2pi to -pi,pi
+    ar[:, [2, 5]] = np.where(
+        ar[:, [2, 5]] > np.pi, ar[:, [2, 5]] - 2 * np.pi, ar[:, [2, 5]]
+    )
 
-    df = pd.DataFrame(data = ar, columns = ["fish0_x", "fish0_y", "fish0_ori", "fish1_x", "fish1_y", "fish1_ori"])
-    df.to_csv(target_path, index = False, sep = ";")
+    df = pd.DataFrame(
+        data=ar,
+        columns=["fish0_x", "fish0_y", "fish0_ori", "fish1_x", "fish1_y", "fish1_ori"],
+    )
+    df.to_csv(target_path, index=False, sep=";")
+
 
 def main():
     # env = ConfigurableGuppyEnv()
@@ -126,9 +154,14 @@ def main():
 
     # getExpert("Fish/Guppy/data/test_robotracker.csv", np.pi/4, 0.1)
 
-    data_paths = ["Fish/Guppy/data/" + elem for elem in os.listdir("Fish/Guppy/data")]
-    for path in data_paths:
-        reduceData(path, "Fish/Guppy/reducedData/" + path[16:])
-    
+    data_paths = [
+        "Fish/Guppy/validationData/" + elem
+        for elem in os.listdir("Fish/Guppy/validationData")
+    ]
+    names = [elem for elem in os.listdir("Fish/Guppy/validationData")]
+    for i in range(len(data_paths)):
+        reduceData(data_paths[i], "Fish/Guppy/rollout/validationData/" + names[i])
+
+
 if __name__ == "__main__":
     main()

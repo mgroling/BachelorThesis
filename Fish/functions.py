@@ -12,6 +12,7 @@ from gym_guppy import (
     PolarCoordinateTargetRobot,
     BoostCouzinGuppy,
     GlobalTargetRobot,
+    TurnBoostRobot,
 )
 
 from _marc_guppy import MarcGuppy
@@ -82,17 +83,6 @@ class TestEnv(VariableStepGuppyEnv):
             return False
 
 
-class CustomDQNPolicy(FeedForwardPolicy):
-    def __init__(self, *args, **kwargs):
-        super(CustomDQNPolicy, self).__init__(
-            *args,
-            **kwargs,
-            layers=[256, 128],
-            layer_norm=True,
-            feature_extraction="mlp"
-        )
-
-
 def getAngle(vector1, vector2, mode="degrees"):
     """
     Given 2 vectors, in the form of tuples (x1, y1) this will return an angle in degrees, if not specfified further.
@@ -122,7 +112,15 @@ def getAngle(vector1, vector2, mode="degrees"):
 
 
 class TestEnvM(VariableStepGuppyEnv):
-    def __init__(self, *, min_steps_per_action=0, max_steps_per_action=None, **kwargs):
+    def __init__(
+        self,
+        *,
+        model_path="Fish/Guppy/models/DQN_29_01_2021_01/",
+        min_steps_per_action=0,
+        max_steps_per_action=None,
+        **kwargs
+    ):
+        self.model_path = model_path
         super().__init__(**kwargs)
 
         self._min_steps_per_action = min_steps_per_action
@@ -156,25 +154,35 @@ class TestEnvM(VariableStepGuppyEnv):
             GlobalTargetRobot(
                 world=self.world,
                 world_bounds=self.world_bounds,
-                position=(0, 0),
+                position=(np.random.rand() - 0.5, np.random.rand() - 0.5),
                 orientation=0,
                 ctrl_params=controller_params,
             )
         )
 
-        num_guppies = 1
-        positions = np.random.normal(size=(num_guppies, 2), scale=0.02) + (0.05, 0.05)
-        orientations = np.random.random_sample(num_guppies) * 2 * np.pi - np.pi
-        for p, o in zip(positions, orientations):
-            self._add_guppy(
-                MarcGuppy(
-                    "Fish/Guppy/models/DQN_22_12_2020_03/",
-                    world=self.world,
-                    world_bounds=self.world_bounds,
-                    position=p,
-                    orientation=o,
-                )
+        self._add_robot(
+            GlobalTargetRobot(
+                world=self.world,
+                world_bounds=self.world_bounds,
+                position=(np.random.rand() - 0.5, np.random.rand() - 0.5),
+                orientation=0,
+                ctrl_params=controller_params,
             )
+        )
+
+        # num_guppies = 1
+        # positions = np.random.normal(size=(num_guppies, 2), scale=0.3)
+        # orientations = np.random.random_sample(num_guppies) * 2 * np.pi - np.pi
+        # for p, o in zip(positions, orientations):
+        #     self._add_guppy(
+        #         MarcGuppy(
+        #             self.model_path,
+        #             world=self.world,
+        #             world_bounds=self.world_bounds,
+        #             position=p,
+        #             orientation=o,
+        #         )
+        #     )
 
     @property
     def _max_steps_per_action_reached(self):
