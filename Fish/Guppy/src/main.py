@@ -10,6 +10,7 @@ from conversion_scripts.convert_marc import convertTrajectory
 from robofish.evaluate import evaluate_all
 from wrappers import DiscreteMatrixActionWrapper, RayCastingWrapper, RayCastingObject
 from stable_baselines.common.policies import MlpPolicy
+from stable_baselines.deepq.policies import FeedForwardPolicy
 
 sys.path.append("Fish")
 from functions import *
@@ -18,13 +19,6 @@ from rolloutEv import *
 
 sys.path.append("SQIL_DQN")
 from SQIL_DQN import SQIL_DQN
-
-# sys.path.append("gym-guppy")
-# from gym_guppy.guppies._robot import (
-#     GlobalTargetRobot,
-#     TurnBoostRobot,
-#     PolarCoordinateTargetRobot,
-# )
 
 import matplotlib.pyplot as plt
 
@@ -42,11 +36,7 @@ def trainModel(dic):
     )
     LEARN_TIMESTEPS = dic["training_timesteps"]
     MODEL_NAME = dic["model_name"]
-    ROLLOUT_PARAMS = {
-        "perc": dic["perc"],
-        "exp_turn_fraction": EXP_TURN_FRACTION,
-        "exp_speed": EXP_SPEED,
-    }
+    PERC = dic["perc"]
 
     class CustomDQNPolicy(FeedForwardPolicy):
         def __init__(self, *args, **kwargs):
@@ -92,8 +82,10 @@ def trainModel(dic):
 
     model.learn(
         total_timesteps=LEARN_TIMESTEPS,
-        rollout_params=ROLLOUT_PARAMS,
+        rollout_params=dic,
         train_graph=False,
+        train_plots=3000,
+        train_plots_path="Fish/Guppy/models/" + MODEL_NAME + "/",
     )
 
     if not os.path.exists("Fish/Guppy/models/" + MODEL_NAME):
@@ -157,7 +149,10 @@ def trainModel(dic):
         ax[i].set_ylabel("average reward")
         ax[i].set_title(
             "max_dist between obs: "
-            + str(np.round(dic["threshhold"][ROLLOUT_PARAMS["perc"][i]], 2)),
+            + str(np.round(dic["threshhold"][PERC[i]], 2))
+            + " ("
+            + str(PERC[i])
+            + ")",
             fontsize=10,
         )
         ax[i].legend(loc="center left")
@@ -176,9 +171,7 @@ def testModel(model_name, save_trajectory=True):
     TURN_BINS, SPEED_BINS = dic["turn_bins"], dic["speed_bins"]
     MAX_TURN, MIN_SPEED, MAX_SPEED = dic["max_turn"], dic["min_speed"], dic["max_speed"]
 
-    env = TestEnvM(
-        max_steps_per_action=200, model_path="Fish/Guppy/models/" + MODEL_NAME + "/"
-    )
+    env = TestEnvM(max_steps_per_action=200)
 
     # env = RayCastingWrapper(env, degrees=DEGREES, num_bins=NUM_RAYS)
     env = DiscreteMatrixActionWrapper(
@@ -254,6 +247,7 @@ def testModel(model_name, save_trajectory=True):
             ],
             names=["model", "validationData"],
             save_folder="Fish/Guppy/models/" + MODEL_NAME + "/trajectory/",
+            ignore_fish=[[], [0]],
         )
 
 
@@ -263,11 +257,7 @@ def createRolloutFiles(dic):
     MAX_TURN, MIN_SPEED, MAX_SPEED = dic["max_turn"], dic["min_speed"], dic["max_speed"]
     EXP_TURN_FRACTION, EXP_SPEED = dic["exp_turn_fraction"], dic["exp_min_dist"]
     EXP_TURN = np.pi / EXP_TURN_FRACTION
-    ROLLOUT_PARAMS = {
-        "perc": dic["perc"],
-        "exp_turn_fraction": EXP_TURN_FRACTION,
-        "exp_speed": EXP_SPEED,
-    }
+    PERC = dic["perc"]
 
     env = TestEnv(max_steps_per_action=200)
 
@@ -308,7 +298,7 @@ def createRolloutFiles(dic):
         saveDistributionThreshholds(obs, obs, folder)
 
     """ Allowed Actions """
-    for perc in ROLLOUT_PARAMS["perc"]:
+    for perc in PERC:
         if not os.path.isfile(folder + "allowedActions_val_" + str(perc) + ".json"):
             max_dist = loadConfig(folder + "distribution_threshholds.json")[
                 "threshhold"
@@ -326,7 +316,7 @@ def createRolloutFiles(dic):
             )
 
     """ Perfect Agent Actions """
-    for perc in ROLLOUT_PARAMS["perc"]:
+    for perc in PERC:
         if not os.path.isfile(folder + "perfect_agent_" + str(perc) + ".json"):
             savePerfectAgentActions(
                 paths_val=[
@@ -346,7 +336,7 @@ def createRolloutFiles(dic):
 
 def main():
     dic = {
-        "model_name": "DQN_02_02_2021_01",
+        "model_name": "DQN_09_02_2021_01",
         "exp_turn_fraction": 4,
         "exp_min_dist": 0.07,
         "turn_bins": 20,
@@ -360,12 +350,44 @@ def main():
         "nn_norm": True,
         "nn_explore_ratio": 0.5,
         "training_timesteps": 25000,
-        "perc": [0, 1, 3],
+        "perc": [0, 1],
     }
-    # createRolloutFiles(dic)
-    # trainModel(dic)
+    createRolloutFiles(dic)
+    trainModel(dic)
     testModel(dic["model_name"], save_trajectory=True)
 
 
 if __name__ == "__main__":
     main()
+    # env = TestEnv(max_steps_per_action=200)
+
+    # env = RayCastingWrapper(env, degrees=360, num_bins=36)
+    # env = DiscreteMatrixActionWrapper(
+    #     env,
+    #     num_bins_turn_rate=20,
+    #     num_bins_speed=10,
+    #     max_turn=np.pi,
+    #     min_speed=0.03,
+    #     max_speed=0.1,
+    # )
+    # obs, act = getAll(
+    #     [
+    #         "Fish/Guppy/validationData/" + elem
+    #         for elem in os.listdir("Fish/Guppy/validationData")
+    #     ],
+    #     np.pi / 4,
+    #     0.07,
+    #     env,
+    # )
+    # obs = np.concatenate(obs, axis=0)
+    # fish, wall = [], []
+    # for i in range(len(obs)):
+    #     f, w = distObs(obs[i], obs)
+    #     fish.extend(f)
+    #     wall.extend(w)
+    # plt.hist([fish, wall], bins=100, label=["fish_dist", "wall_dist"], density=True)
+    # plt.legend()
+    # plt.xlabel("distance")
+    # plt.ylabel("frequency")
+    # plt.title("Distance of validationData obs: fish vs wall impact")
+    # plt.show()

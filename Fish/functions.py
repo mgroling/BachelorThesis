@@ -1,9 +1,15 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import math
 import sys
+import os
 
-from stable_baselines.deepq.policies import FeedForwardPolicy
+from robofish.evaluate import evaluate_all
+from conversion_scripts.convert_marc import convertTrajectory
+
+sys.path.append("Fish")
+from wrappers import RayCastingObject, DiscreteMatrixActionWrapper
 
 sys.path.append("gym-guppy")
 from gym_guppy import (
@@ -154,7 +160,7 @@ class TestEnvM(VariableStepGuppyEnv):
             GlobalTargetRobot(
                 world=self.world,
                 world_bounds=self.world_bounds,
-                position=(np.random.rand() - 0.5, np.random.rand() - 0.5),
+                position=(0, 0),  # np.random.rand() - 0.5, np.random.rand() - 0.5
                 orientation=0,
                 ctrl_params=controller_params,
             )
@@ -164,7 +170,7 @@ class TestEnvM(VariableStepGuppyEnv):
             GlobalTargetRobot(
                 world=self.world,
                 world_bounds=self.world_bounds,
-                position=(np.random.rand() - 0.5, np.random.rand() - 0.5),
+                position=(0.1, 0.1),
                 orientation=0,
                 ctrl_params=controller_params,
             )
@@ -193,6 +199,88 @@ class TestEnvM(VariableStepGuppyEnv):
             return True
         else:
             return False
+
+
+def testModel_(model, path, dic, timestep):
+    if path is None:
+        print("path is missing")
+        return
+
+    TURN_BINS, SPEED_BINS = dic["turn_bins"], dic["speed_bins"]
+    MIN_SPEED, MAX_SPEED, MAX_TURN = dic["min_speed"], dic["max_speed"], dic["max_turn"]
+    DEGREES, NUM_RAYS = dic["degrees"], dic["num_bins_rays"]
+
+    env = TestEnvM(max_steps_per_action=200)
+
+    env = DiscreteMatrixActionWrapper(
+        env,
+        num_bins_turn_rate=TURN_BINS,
+        num_bins_speed=SPEED_BINS,
+        max_turn=MAX_TURN,
+        min_speed=MIN_SPEED,
+        max_speed=MAX_SPEED,
+    )
+
+    ray = RayCastingObject(degrees=DEGREES, num_bins=NUM_RAYS)
+
+    obs = env.reset()
+    done = False
+    while not done:
+        action, _ = model.predict(ray.observation(obs), deterministic=True)
+        obs2 = obs.copy()
+        obs2[0] = obs[1]
+        obs2[1] = obs[0]
+        action2, _ = model.predict(ray.observation(obs2), deterministic=True)
+
+        temp = obs.copy()
+
+        obs, reward, done, _ = env.step([action, action2])
+
+        if len(env.state_history) > 50000:
+            break
+    env.close()
+
+    temp = env.state_history[0::5]
+    temp = temp[0:10000]
+
+    trajectory = np.concatenate(temp, axis=0)
+
+    if not os.path.exists(path + "training_plots/timestep_" + str(timestep)):
+        os.makedirs(path + "training_plots/timestep_" + str(timestep))
+
+    df = pd.DataFrame(
+        data=trajectory,
+        columns=[
+            "fish0_x",
+            "fish0_y",
+            "fish0_ori",
+            "fish1_x",
+            "fish1_y",
+            "fish1_ori",
+        ],
+    )
+    df.to_csv(
+        path + "training_plots/timestep_" + str(timestep) + "/trajectory.csv",
+        index=False,
+        sep=";",
+    )
+
+    convertTrajectory(
+        path + "training_plots/timestep_" + str(timestep) + "/trajectory.csv",
+        path + "training_plots/timestep_" + str(timestep) + "/trajectory_io.hdf5",
+    )
+
+    evaluate_all(
+        [
+            [path + "training_plots/timestep_" + str(timestep) + "/trajectory_io.hdf5"],
+            [
+                "Fish/Guppy/validationData_io/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.hdf5"
+            ],
+        ],
+        names=["model", "validationData"],
+        save_folder=path + "training_plots/timestep_" + str(timestep) + "/",
+        ignore_fish=[[], [0]],
+    )
 
 
 def distance(x_1, y_1, x_2, y_2):

@@ -12,11 +12,13 @@ from convertData import getAll
 
 def distObs(obs_1, obs_2):
     diff_bin = np.abs(np.argmax(obs_1[0]) - np.argmax(obs_2[:, 0], axis=1)) + 1
-    diff_bin = np.where(diff_bin > len(obs_1[0])/2, len(obs_1[0]) - diff_bin, diff_bin)
+    diff_bin = np.where(
+        diff_bin > len(obs_1[0]) / 2, len(obs_1[0]) - diff_bin, diff_bin
+    )
     max_fish = diff_bin * (np.abs(obs_1[0].max() - obs_2[:, 0].max(axis=1)))
     sum_wall = np.sum(np.abs(obs_1[1] - obs_2[:, 1]), axis=1)
     out = max_fish + sum_wall
-    return out
+    return out  # max_fish, sum_wall
 
 
 def closeActions(single_obs, all_obs, all_act, max_dist):

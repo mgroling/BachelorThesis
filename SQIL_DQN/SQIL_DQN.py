@@ -6,7 +6,7 @@ import pandas as pd
 import gym
 import matplotlib.pyplot as plt
 
-from functions import getAngle
+from functions import getAngle, testModel_
 
 from stable_baselines import logger
 from stable_baselines.common import (
@@ -58,6 +58,8 @@ class SQIL_DQN(DQN):
         reset_num_timesteps=True,
         replay_wrapper=None,
         train_graph=True,
+        train_plots=None,
+        train_plots_path=None
     ):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
@@ -130,13 +132,17 @@ class SQIL_DQN(DQN):
                                 model=self,
                                 env=self.env,
                                 exp_turn_fraction=rollout_params["exp_turn_fraction"],
-                                exp_speed=rollout_params["exp_speed"],
+                                exp_speed=rollout_params["exp_min_dist"],
                                 perc=l,
                                 deterministic=True,
                             )
                         )
                         k += 1
                     obs = self.env.reset()
+                if not train_plots is None:
+                    if _ % train_plots == 0:
+                        testModel_(self, train_plots_path, rollout_params, _)
+
                 # Take action and update exploration to the newest value
                 kwargs = {}
                 if not self.param_noise:
