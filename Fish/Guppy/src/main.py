@@ -236,18 +236,20 @@ def testModel(model_name, save_trajectory=True):
         convertTrajectory(
             "Fish/Guppy/models/" + MODEL_NAME + "/trajectory/trajectory.csv",
             "Fish/Guppy/models/" + MODEL_NAME + "/trajectory/trajectory_io.hdf5",
+            ["robot", "robot"],
         )
 
         evaluate_all(
             [
                 ["Fish/Guppy/models/" + MODEL_NAME + "/trajectory/trajectory_io.hdf5"],
                 [
-                    "Fish/Guppy/validationData_io/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.hdf5"
+                    "Fish/Guppy/rollout/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.hdf5",
+                    "Fish/Guppy/rollout/validationData/Q20I_Fri_Dec__6_15_13_09_2019_Robotracker.hdf5",
                 ],
             ],
             names=["model", "validationData"],
             save_folder="Fish/Guppy/models/" + MODEL_NAME + "/trajectory/",
-            ignore_fish=[[], [0]],
+            consider_categories=[None, "fish"],
         )
 
 
@@ -358,6 +360,23 @@ def main():
 
 
 if __name__ == "__main__":
+    # env = TestEnv(max_steps_per_action=200)
+    # env = RayCastingWrapper(env, degrees=360, num_bins=36)
+    # env = DiscreteMatrixActionWrapper(
+    #     env,
+    #     num_bins_turn_rate=20,
+    #     num_bins_speed=10,
+    #     max_turn=np.pi,
+    #     min_speed=0.03,
+    #     max_speed=0.1,
+    # )
+    # obs, act = getAll(
+    #     ["Fish/Guppy/Data/" + elem for elem in os.listdir("Fish/Guppy/Data")],
+    #     np.pi / 4,
+    #     0.05,
+    #     env,
+    # )
+    # print("expert timesteps:", sum([len(elem) for elem in obs]))
     main()
     # env = TestEnv(max_steps_per_action=200)
 

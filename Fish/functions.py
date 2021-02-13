@@ -268,18 +268,20 @@ def testModel_(model, path, dic, timestep):
     convertTrajectory(
         path + "training_plots/timestep_" + str(timestep) + "/trajectory.csv",
         path + "training_plots/timestep_" + str(timestep) + "/trajectory_io.hdf5",
+        ["robot", "robot"],
     )
 
     evaluate_all(
         [
             [path + "training_plots/timestep_" + str(timestep) + "/trajectory_io.hdf5"],
             [
-                "Fish/Guppy/validationData_io/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.hdf5"
+                "Fish/Guppy/rollout/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.hdf5",
+                "Fish/Guppy/rollout/validationData/Q20I_Fri_Dec__6_15_13_09_2019_Robotracker.hdf5",
             ],
         ],
         names=["model", "validationData"],
         save_folder=path + "training_plots/timestep_" + str(timestep) + "/",
-        ignore_fish=[[], [0]],
+        consider_categories=[None, "fish"],
     )
 
 

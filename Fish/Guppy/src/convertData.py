@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import sys
 import os
 
+from conversion_scripts.convert_marc import convertTrajectory
+
 sys.path.append("gym-guppy")
 from gym_guppy.envs._configurable_guppy_env import ConfigurableGuppyEnv
 from gym_guppy.wrappers.observation_wrapper import RayCastingWrapper
@@ -49,7 +51,7 @@ def getExpert(path, min_turn, min_dist, env):
         cur_turn += turn_dist[i, 0]
         cur_dist += turn_dist[i, 1]
 
-        if cur_turn > min_turn or cur_turn < -min_turn or cur_dist > min_dist:
+        if cur_dist > min_dist:  # cur_turn > min_turn or cur_turn < -min_turn or
             keep_rows[i + 1] = True
             cur_turn = 0
             cur_dist = 0
@@ -79,9 +81,7 @@ def getExpert(path, min_turn, min_dist, env):
         )
     )
 
-    # plt.hist(turn_dist[:, 0])
-    # plt.show()
-    # plt.hist(turn_dist[:, 1])
+    # plt.hist(turn_dist[:, 1], bins=100)
     # plt.show()
 
     # Convert raw turn/dist values to bin format
@@ -94,7 +94,7 @@ def getExpert(path, min_turn, min_dist, env):
     bin_dist = np.argmin(dist_dist, axis=1)
 
     chosen_action = bin_turn * len(env.speed_bins) + bin_dist
-    
+
     # Get Raycasts
     # remove last row, cause we dont have turn/dist for it
     ar = ar[:-1]
@@ -128,20 +128,30 @@ def reduceData(path, target_path):
     """
     deletes columns from data, such that we can easily use it in evaluation
     """
-    # we only need robo_x, robo_y, robo_orientation_radians, fish_x, fish_y, fish_orientation_radians
-    ar = pd.read_csv(path).to_numpy()[:, [5, 6, 8, 11, 12, 14]].astype(np.float64)
+    # we only need time, robo_x, robo_y, robo_orientation_radians, fish_x, fish_y, fish_orientation_radians
+    ar = pd.read_csv(path).to_numpy()[:, [2, 5, 6, 8, 11, 12, 14]].astype(np.float64)
     # convert x,y from cm to m
-    ar[:, [0, 1, 3, 4]] = ar[:, [0, 1, 3, 4]] / 100
+    ar[:, [1, 2, 4, 5]] = ar[:, [1, 2, 4, 5]] / 100
     # convert x,y from (0,1) to (-0.5,0.5)
-    ar[:, [0, 1, 3, 4]] = ar[:, [0, 1, 3, 4]] - 0.5
+    ar[:, [1, 2, 4, 5]] = ar[:, [1, 2, 4, 5]] - 0.5
     # convert orientation from 0, 2pi to -pi,pi
-    ar[:, [2, 5]] = np.where(
-        ar[:, [2, 5]] > np.pi, ar[:, [2, 5]] - 2 * np.pi, ar[:, [2, 5]]
+    ar[:, [3, 6]] = np.where(
+        ar[:, [3, 6]] > np.pi, ar[:, [3, 6]] - 2 * np.pi, ar[:, [3, 6]]
     )
+    start_timestep = ar[0, 0]
+    ar[:, 0] = ar[:, 0] - start_timestep
 
     df = pd.DataFrame(
-        data=ar,
-        columns=["fish0_x", "fish0_y", "fish0_ori", "fish1_x", "fish1_y", "fish1_ori"],
+        data=ar[:, [1, 2, 3, 4, 5, 6, 0]],
+        columns=[
+            "fish0_x",
+            "fish0_y",
+            "fish0_ori",
+            "fish1_x",
+            "fish1_y",
+            "fish1_ori",
+            "time in ms",
+        ],
     )
     df.to_csv(target_path, index=False, sep=";")
 
@@ -161,6 +171,11 @@ def main():
     names = [elem for elem in os.listdir("Fish/Guppy/validationData")]
     for i in range(len(data_paths)):
         reduceData(data_paths[i], "Fish/Guppy/rollout/validationData/" + names[i])
+        convertTrajectory(
+            "Fish/Guppy/rollout/validationData/" + names[i],
+            "Fish/Guppy/rollout/validationData/" + names[i][:-3] + "hdf5",
+            ["robot", "fish"],
+        )
 
 
 if __name__ == "__main__":
