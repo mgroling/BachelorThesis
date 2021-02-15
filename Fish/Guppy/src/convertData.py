@@ -24,44 +24,22 @@ def getExpert(path, min_turn, min_dist, env):
         ar[:, [2, 5]] > np.pi, ar[:, [2, 5]] - 2 * np.pi, ar[:, [2, 5]]
     )
 
-    # calculate turn and dist for each timestep
-    turn_dist = np.empty((len(ar) - 1, 2))
-    # (orientation{t} - orientation{t-1}) = turn, also make it take the "shorter" turn (the shorter angle)
-    turn_dist[:, 0] = ar[1:, 2] - ar[:-1, 2]
-    turn_dist[:, 0] = np.where(
-        turn_dist[:, 0] < -np.pi, turn_dist[:, 0] + 2 * np.pi, turn_dist[:, 0]
-    )
-    turn_dist[:, 0] = np.where(
-        turn_dist[:, 0] > np.pi, turn_dist[:, 0] - 2 * np.pi, turn_dist[:, 0]
-    )
-    # sqrt((x{t}-x{t-1})**2 + (y{t}-y{t-1})**2) = dist
-    turn_dist[:, 1] = np.sqrt(
-        np.array(
-            np.power(ar[1:, 0] - ar[:-1, 0], 2) + np.power(ar[1:, 1] - ar[:-1, 1], 2),
-            dtype=np.float64,
-        )
-    )
-
     # summarize movement that was too small
     keep_rows = np.zeros((len(ar)), dtype=bool)
     keep_rows[0] = True
-    cur_turn = 0
-    cur_dist = 0
-    for i in range(0, len(turn_dist)):
-        cur_turn += turn_dist[i, 0]
-        cur_dist += turn_dist[i, 1]
+    last_row_to_keep = 0
+    for i in range(1, len(ar)):
+        distance = (
+            (ar[last_row_to_keep, 0] - ar[i, 0]) ** 2
+            + (ar[last_row_to_keep, 1] - ar[i, 1]) ** 2
+        ) ** (1 / 2)
 
-        if cur_dist > min_dist:  # cur_turn > min_turn or cur_turn < -min_turn or
-            keep_rows[i + 1] = True
-            cur_turn = 0
-            cur_dist = 0
+        if distance > min_dist:
+            keep_rows[i] = True
+            last_row_to_keep = i
 
-    # only take timesteps, that give a good enough change from t-1 to t
+    # only take timesteps, so that the resulting array give a good enough change from t-1 to t
     ar = ar[keep_rows]
-
-    # # plot tracks
-    # plt.plot(ar[:, 0], ar[:, 1])
-    # plt.show()
 
     # calculate turn and dist for each timestep
     turn_dist = np.empty((len(ar) - 1, 2))
@@ -81,7 +59,7 @@ def getExpert(path, min_turn, min_dist, env):
         )
     )
 
-    # plt.hist(turn_dist[:, 1], bins=100)
+    # plt.hist(turn_dist[:, 1], bins=20, range = [0, 0.1])
     # plt.show()
 
     # Convert raw turn/dist values to bin format

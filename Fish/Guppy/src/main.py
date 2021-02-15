@@ -83,10 +83,11 @@ def trainModel(dic):
     model.learn(
         total_timesteps=LEARN_TIMESTEPS,
         rollout_params=dic,
+        rollout_timesteps=None,
         train_graph=False,
-        train_plots=3000,
-        train_plots_path="Fish/Guppy/models/" + MODEL_NAME + "/",
     )
+    # train_plots=3000,
+    # train_plots_path="Fish/Guppy/models/" + MODEL_NAME + "/",
 
     if not os.path.exists("Fish/Guppy/models/" + MODEL_NAME):
         os.makedirs("Fish/Guppy/models/" + MODEL_NAME)
@@ -338,13 +339,13 @@ def createRolloutFiles(dic):
 
 def main():
     dic = {
-        "model_name": "DQN_09_02_2021_01",
+        "model_name": "DQN_15_02_2021_01",
         "exp_turn_fraction": 4,
-        "exp_min_dist": 0.07,
+        "exp_min_dist": 0.01,
         "turn_bins": 20,
         "speed_bins": 10,
-        "min_speed": 0.03,
-        "max_speed": 0.1,
+        "min_speed": 0.01,
+        "max_speed": 0.07,
         "max_turn": np.pi,
         "degrees": 360,
         "num_bins_rays": 36,
@@ -352,7 +353,7 @@ def main():
         "nn_norm": True,
         "nn_explore_ratio": 0.5,
         "training_timesteps": 25000,
-        "perc": [0, 1],
+        "perc": [0],
     }
     createRolloutFiles(dic)
     trainModel(dic)
@@ -364,16 +365,16 @@ if __name__ == "__main__":
     # env = RayCastingWrapper(env, degrees=360, num_bins=36)
     # env = DiscreteMatrixActionWrapper(
     #     env,
-    #     num_bins_turn_rate=20,
-    #     num_bins_speed=10,
-    #     max_turn=np.pi,
-    #     min_speed=0.03,
-    #     max_speed=0.1,
+    #     num_bins_turn_rate=1,
+    #     num_bins_speed=1,
+    #     max_turn=np.pi / 50,
+    #     min_speed=0.01,
+    #     max_speed=0.01,
     # )
     # obs, act = getAll(
     #     ["Fish/Guppy/Data/" + elem for elem in os.listdir("Fish/Guppy/Data")],
     #     np.pi / 4,
-    #     0.05,
+    #     0.01,
     #     env,
     # )
     # print("expert timesteps:", sum([len(elem) for elem in obs]))
