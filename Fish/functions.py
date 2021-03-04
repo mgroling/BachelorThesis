@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 import math
 import sys
 import os
+import gym
 
-from robofish.evaluate import evaluate_all
+from robofish.evaluate import *
 from conversion_scripts.convert_marc import convertTrajectory
 
 sys.path.append("Fish")
@@ -13,55 +14,25 @@ from wrappers import RayCastingObject, DiscreteMatrixActionWrapper
 
 sys.path.append("gym-guppy")
 from gym_guppy import (
-    VariableStepGuppyEnv,
     GuppyEnv,
-    PolarCoordinateTargetRobot,
+    TurnSpeedRobot,
     BoostCouzinGuppy,
-    GlobalTargetRobot,
-    TurnBoostRobot,
 )
 
 from _marc_guppy import MarcGuppy
 
 
-class TestEnv(VariableStepGuppyEnv):
-    def __init__(self, *, min_steps_per_action=0, max_steps_per_action=None, **kwargs):
-        super().__init__(**kwargs)
-
-        self._min_steps_per_action = min_steps_per_action
-        self._max_steps_per_action = max_steps_per_action
-        self._step_logger = []
-        self.enable_step_logging = True
-        self._reset_step_logger = False
-        self.too_many_steps = 0
-        self.state_history = []
-
+class TestEnv(GuppyEnv):
     def _reset(self):
-        controller_params = {
-            "ori_ctrl_params": {
-                "p": 1.2,
-                "i": 0.0,
-                "d": 0.0,
-                "speed": 0.2,
-                "slope": 0.75,
-            },
-            "fwd_ctrl_params": {
-                "p": 1.0,
-                "i": 0.0,
-                "d": 1.0,
-                "speed": 0.2,
-                "slope": 0.5,
-                "ori_gate_slope": 3.0,
-            },
-        }
+        # set frequency to 20Hz
+        self._guppy_steps_per_action = 5
 
         self._add_robot(
-            GlobalTargetRobot(
+            TurnSpeedRobot(
                 world=self.world,
                 world_bounds=self.world_bounds,
-                position=(0, 0),
-                orientation=0,
-                ctrl_params=controller_params,
+                position=(0.3, 0.3),
+                orientation=1.57,
             )
         )
 
@@ -77,16 +48,6 @@ class TestEnv(VariableStepGuppyEnv):
                     orientation=o,
                 )
             )
-
-    @property
-    def _max_steps_per_action_reached(self):
-        if self._max_steps_per_action is None:
-            return False
-        if self._action_steps >= self._max_steps_per_action:
-            self.too_many_steps += 1
-            return True
-        else:
-            return False
 
 
 def getAngle(vector1, vector2, mode="degrees"):
@@ -117,90 +78,6 @@ def getAngle(vector1, vector2, mode="degrees"):
     return angle if mode == "degrees" else math.radians(angle)
 
 
-class TestEnvM(VariableStepGuppyEnv):
-    def __init__(
-        self,
-        *,
-        model_path="Fish/Guppy/models/DQN_29_01_2021_01/",
-        min_steps_per_action=0,
-        max_steps_per_action=None,
-        **kwargs
-    ):
-        self.model_path = model_path
-        super().__init__(**kwargs)
-
-        self._min_steps_per_action = min_steps_per_action
-        self._max_steps_per_action = max_steps_per_action
-        self._step_logger = []
-        self.enable_step_logging = True
-        self._reset_step_logger = False
-        self.too_many_steps = 0
-        self.state_history = []
-
-    def _reset(self):
-        controller_params = {
-            "ori_ctrl_params": {
-                "p": 1.2,
-                "i": 0.0,
-                "d": 0.0,
-                "speed": 0.2,
-                "slope": 0.75,
-            },
-            "fwd_ctrl_params": {
-                "p": 1.0,
-                "i": 0.0,
-                "d": 1.0,
-                "speed": 0.2,
-                "slope": 0.5,
-                "ori_gate_slope": 3.0,
-            },
-        }
-
-        self._add_robot(
-            GlobalTargetRobot(
-                world=self.world,
-                world_bounds=self.world_bounds,
-                position=(0, 0),  # np.random.rand() - 0.5, np.random.rand() - 0.5
-                orientation=0,
-                ctrl_params=controller_params,
-            )
-        )
-
-        self._add_robot(
-            GlobalTargetRobot(
-                world=self.world,
-                world_bounds=self.world_bounds,
-                position=(0.1, 0.1),
-                orientation=0,
-                ctrl_params=controller_params,
-            )
-        )
-
-        # num_guppies = 1
-        # positions = np.random.normal(size=(num_guppies, 2), scale=0.3)
-        # orientations = np.random.random_sample(num_guppies) * 2 * np.pi - np.pi
-        # for p, o in zip(positions, orientations):
-        #     self._add_guppy(
-        #         MarcGuppy(
-        #             self.model_path,
-        #             world=self.world,
-        #             world_bounds=self.world_bounds,
-        #             position=p,
-        #             orientation=o,
-        #         )
-        #     )
-
-    @property
-    def _max_steps_per_action_reached(self):
-        if self._max_steps_per_action is None:
-            return False
-        if self._action_steps >= self._max_steps_per_action:
-            self.too_many_steps += 1
-            return True
-        else:
-            return False
-
-
 def testModel_(model, path, dic, timestep):
     if path is None:
         print("path is missing")
@@ -210,43 +87,38 @@ def testModel_(model, path, dic, timestep):
     MIN_SPEED, MAX_SPEED, MAX_TURN = dic["min_speed"], dic["max_speed"], dic["max_turn"]
     DEGREES, NUM_RAYS = dic["degrees"], dic["num_bins_rays"]
 
-    env = TestEnvM(max_steps_per_action=200)
+    class TestEnvM(GuppyEnv):
+        def _reset(self):
+            # set frequency to 20Hz
+            self._guppy_steps_per_action = 5
 
-    env = DiscreteMatrixActionWrapper(
-        env,
-        num_bins_turn_rate=TURN_BINS,
-        num_bins_speed=SPEED_BINS,
-        max_turn=MAX_TURN,
-        min_speed=MIN_SPEED,
-        max_speed=MAX_SPEED,
+            num_guppies = 2
+            positions = np.random.normal(size=(num_guppies, 2), scale=0.02) + (
+                0.05,
+                0.05,
+            )
+            orientations = np.random.random_sample(num_guppies) * 2 * np.pi - np.pi
+            for p, o in zip(positions, orientations):
+                self._add_guppy(
+                    MarcGuppy(
+                        model=model,
+                        dic=dic,
+                        world=self.world,
+                        world_bounds=self.world_bounds,
+                        position=p,
+                        orientation=o,
+                    )
+                )
+
+    env = TestEnvM(steps_per_robot_action=5)
+
+    NUM_STEPS = 2500
+    trajectory = np.stack([env.step(action=None)[0] for _ in range(NUM_STEPS)]).reshape(
+        (NUM_STEPS, 6)
     )
 
-    ray = RayCastingObject(degrees=DEGREES, num_bins=NUM_RAYS)
-
-    obs = env.reset()
-    done = False
-    while not done:
-        action, _ = model.predict(ray.observation(obs), deterministic=True)
-        obs2 = obs.copy()
-        obs2[0] = obs[1]
-        obs2[1] = obs[0]
-        action2, _ = model.predict(ray.observation(obs2), deterministic=True)
-
-        temp = obs.copy()
-
-        obs, reward, done, _ = env.step([action, action2])
-
-        if len(env.state_history) > 50000:
-            break
-    env.close()
-
-    temp = env.state_history[0::5]
-    temp = temp[0:10000]
-
-    trajectory = np.concatenate(temp, axis=0)
-
-    if not os.path.exists(path + "training_plots/timestep_" + str(timestep)):
-        os.makedirs(path + "training_plots/timestep_" + str(timestep))
+    if not os.path.exists(path + "training_plots/trajec"):
+        os.makedirs(path + "training_plots/trajec")
 
     df = pd.DataFrame(
         data=trajectory,
@@ -260,29 +132,66 @@ def testModel_(model, path, dic, timestep):
         ],
     )
     df.to_csv(
-        path + "training_plots/timestep_" + str(timestep) + "/trajectory.csv",
+        path + "training_plots/trajec/timestep_" + str(timestep) + ".csv",
         index=False,
         sep=";",
     )
 
     convertTrajectory(
-        path + "training_plots/timestep_" + str(timestep) + "/trajectory.csv",
-        path + "training_plots/timestep_" + str(timestep) + "/trajectory_io.hdf5",
+        path + "training_plots/trajec/timestep_" + str(timestep) + ".csv",
+        path + "training_plots/trajec/timestep_" + str(timestep) + "_io.hdf5",
         ["robot", "robot"],
     )
 
-    evaluate_all(
+    # create folders for plots
+    plot_kinds = [
+        "distanceToWall",
+        "follow_iid",
+        "orientation",
+        "posVec",
+        "relOrientation",
+        "speed",
+        "tankpositions",
+        "trajectories",
+        "turn",
+    ]
+    plot_functions = [
+        evaluate_distanceToWall,
+        evaluate_follow_iid,
+        evaluate_orientation,
+        evaluate_positionVec,
+        evaluate_relativeOrientation,
+        evaluate_speed,
+        evaluate_tankpositions,
+        evaluate_trajectories,
+        evaluate_turn,
+    ]
+    for kind in plot_kinds:
+        if not os.path.exists(path + "training_plots/" + kind):
+            os.makedirs(path + "training_plots/" + kind)
+
+    in_path = [
+        [path + "training_plots/trajec/timestep_" + str(timestep) + "_io.hdf5"],
         [
-            [path + "training_plots/timestep_" + str(timestep) + "/trajectory_io.hdf5"],
-            [
-                "Fish/Guppy/rollout/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.hdf5",
-                "Fish/Guppy/rollout/validationData/Q20I_Fri_Dec__6_15_13_09_2019_Robotracker.hdf5",
-            ],
+            "Fish/Guppy/rollout/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.hdf5",
+            "Fish/Guppy/rollout/validationData/Q20I_Fri_Dec__6_15_13_09_2019_Robotracker.hdf5",
         ],
-        names=["model", "validationData"],
-        save_folder=path + "training_plots/timestep_" + str(timestep) + "/",
-        consider_categories=[None, "fish"],
-    )
+    ]
+    in_names = ["model", "validationData"]
+    in_save_folder = path + "training_plots/"
+    in_consider_cats = [None, "fish"]
+
+    for i, plot_function in enumerate(plot_functions):
+        plot_function(
+            paths=in_path,
+            names=in_names,
+            save_path=in_save_folder
+            + plot_kinds[i]
+            + "/timestep_"
+            + str(timestep)
+            + ".png",
+            consider_categories=in_consider_cats,
+        )
 
 
 def distance(x_1, y_1, x_2, y_2):

@@ -177,9 +177,14 @@ class SQIL_DQN(DQN):
                     )[0]
                 env_action = action
 
-                # check if next state (after action) would be outside of the field (CLIPPING)
+                # check if next state (after action) would be outside of fish tank (CLIPPING)
                 env_state = self.env.get_state()
-                coords = self.env.action(env_action)
+                turn_dist = self.env.action(env_action)
+                global_turn = env_state[0][2] + turn_dist[0]
+                coords = [
+                    env_state[0][0] + turn_dist[1] * np.cos(global_turn),
+                    env_state[0][1] + turn_dist[1] * np.sin(global_turn),
+                ]
                 changed = False
                 if coords[0] < -0.49:
                     coords[0] = -0.47

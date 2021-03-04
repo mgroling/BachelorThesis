@@ -29,12 +29,12 @@ def objective(trial):
     layer_norm = trial.suggest_categorical("layer_norm", [True, False])
 
     gamma = trial.suggest_uniform("gamma", 0.5, 0.999)
-    lr = trial.suggest_loguniform("lr", 1e-5, 0.1)
+    lr = trial.suggest_loguniform("lr", 1e-6, 0.1)
     n_batch = trial.suggest_int("n_batch", 1, 128)
 
     explore_fraction = trial.suggest_uniform("explore_fraction", 0.01, 0.5)
 
-    learn_timesteps = trial.suggest_int("learn_timesteps", 5000, 1e5, 1000)
+    learn_timesteps = trial.suggest_int("learn_timesteps", 5000, 2e5, 1000)
     print("Learn timesteps", learn_timesteps)
 
     # Train model and evaluate it
@@ -48,15 +48,15 @@ def objective(trial):
                 feature_extraction="mlp"
             )
 
-    env = TestEnv(max_steps_per_action=200)
+    env = TestEnv(steps_per_robot_action = 5)
     env = RayCastingWrapper(env, degrees=360, num_bins=36)
     env = DiscreteMatrixActionWrapper(
         env,
         num_bins_turn_rate=20,
         num_bins_speed=10,
         max_turn=np.pi,
-        min_speed=0.01,
-        max_speed=0.07,
+        min_speed=0.00,
+        max_speed=0.05,
     )
 
     model = SQIL_DQN(
@@ -74,13 +74,13 @@ def objective(trial):
 
     obs, act = getAll(
         ["Fish/Guppy/data/" + elem for elem in os.listdir("Fish/Guppy/data")],
-        np.pi / 4,
-        0.01,
+        np.pi / 5,
+        0.00,
         env,
     )
     model.initializeExpertBuffer(obs, act)
 
-    rollout_dic = {"perc": [0], "exp_turn_fraction": 4, "exp_min_dist": 0.01}
+    rollout_dic = {"perc": [0], "exp_turn_fraction": 5, "exp_min_dist": 0.00}
 
     model.learn(
         total_timesteps=learn_timesteps,
@@ -110,11 +110,12 @@ def loadStudy(path):
 
 
 def main():
-    study = optuna.create_study()
+    # study = optuna.create_study()
+    study = loadStudy("Fish/Guppy/studies/study_new.pkl")
 
-    while True:
-        study.optimize(objective, n_trials=1)
-        saveStudy(study, "Fish/Guppy/studies/study.pkl")
+    # while True:
+    #     study.optimize(objective, n_trials=1)
+    #     saveStudy(study, "Fish/Guppy/studies/study_new.pkl")
 
     print(study.best_params)
 

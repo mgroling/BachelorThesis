@@ -24,23 +24,6 @@ def getExpert(path, min_turn, min_dist, env):
         ar[:, [2, 5]] > np.pi, ar[:, [2, 5]] - 2 * np.pi, ar[:, [2, 5]]
     )
 
-    # summarize movement that was too small
-    keep_rows = np.zeros((len(ar)), dtype=bool)
-    keep_rows[0] = True
-    last_row_to_keep = 0
-    for i in range(1, len(ar)):
-        distance = (
-            (ar[last_row_to_keep, 0] - ar[i, 0]) ** 2
-            + (ar[last_row_to_keep, 1] - ar[i, 1]) ** 2
-        ) ** (1 / 2)
-
-        if distance > min_dist:
-            keep_rows[i] = True
-            last_row_to_keep = i
-
-    # only take timesteps, so that the resulting array give a good enough change from t-1 to t
-    ar = ar[keep_rows]
-
     # calculate turn and dist for each timestep
     turn_dist = np.empty((len(ar) - 1, 2))
     # (orientation{t} - orientation{t-1}) = turn, also make it take the "shorter" turn (the shorter angle)
@@ -72,6 +55,21 @@ def getExpert(path, min_turn, min_dist, env):
     bin_dist = np.argmin(dist_dist, axis=1)
 
     chosen_action = bin_turn * len(env.speed_bins) + bin_dist
+
+    # turn_rate = np.floor(chosen_action / len(env.speed_bins)).astype(int)
+    # speed = (chosen_action % len(env.speed_bins)).astype(int)
+    # turn, speed = env.turn_rate_bins[turn_rate], env.speed_bins[speed]
+
+    # fig, ax = plt.subplots(2, 2, figsize=(15, 15))
+    # ax[0][0].hist(turn_dist[:, 0], bins=20, range=[-np.pi, np.pi])
+    # ax[0][0].set_title("original turn")
+    # ax[0][1].hist(turn, bins=20, range=[-np.pi, np.pi])
+    # ax[0][1].set_title("converted turn")
+    # ax[1][0].hist(turn_dist[:, 1], bins=10, range=[0.01, 0.07])
+    # ax[1][0].set_title("original speed")
+    # ax[1][1].hist(speed, bins=10, range=[0.01, 0.07])
+    # ax[1][1].set_title("converted speed")
+    # plt.show()
 
     # Get Raycasts
     # remove last row, cause we dont have turn/dist for it

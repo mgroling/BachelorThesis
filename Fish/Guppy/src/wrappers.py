@@ -24,45 +24,13 @@ class DiscreteMatrixActionWrapper(gym.ActionWrapper):
         self.speed_bins = np.linspace(min_speed, max_speed, num_bins_speed)
 
         self.action_space = gym.spaces.Discrete(num_bins_turn_rate * num_bins_speed)
-        self.target_pos = None
 
     def action(self, action):
-        if not type(action) == list:
-            action = [action]
-        actions = []
-        state = self.get_state()
+        turn_rate = math.floor(action / len(self.speed_bins))
+        speed = action % len(self.speed_bins)
+        turn, speed = self.turn_rate_bins[turn_rate], self.speed_bins[speed]
 
-        # pos_error = self._target - self.get_position()
-        # if np.linalg.norm(pos_error) < self._pos_eps / 2
-
-        if self.target_pos is None:
-            self.target_pos = []
-            for i in range(len(action)):
-                self.target_pos.append(state[i][:2])
-
-        for i in range(len(action)):
-            pos_error = self.target_pos[i] - state[i][:2]
-            if np.linalg.norm(pos_error) < 0.01:
-                pose = state[i]
-
-                turn_rate = math.floor(action[i] / len(self.speed_bins))
-                speed = action[i] % len(self.speed_bins)
-                turn, speed = self.turn_rate_bins[turn_rate], self.speed_bins[speed]
-
-                global_turn = pose[2] + turn
-                global_x, global_y = (
-                    pose[0] + speed * np.cos(global_turn),
-                    pose[1] + speed * np.sin(global_turn),
-                )
-
-                actions.append([global_x, global_y])
-                self.target_pos[i] = [global_x, global_y]
-            else:
-                actions.append(self.target_pos[i])
-
-        self.target_pos = actions
-
-        return actions[0] if len(actions) == 1 else actions
+        return [turn, speed]
 
     def reverse_action(self, action):
         raise NotImplementedError

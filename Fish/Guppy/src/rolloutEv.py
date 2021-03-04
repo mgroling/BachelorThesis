@@ -15,10 +15,13 @@ def distObs(obs_1, obs_2):
     diff_bin = np.where(
         diff_bin > len(obs_1[0]) / 2, len(obs_1[0]) - diff_bin, diff_bin
     )
-    max_fish = diff_bin * (np.abs(obs_1[0].max() - obs_2[:, 0].max(axis=1)))
+    max_fish = (
+        diff_bin
+        * (np.abs(obs_1[0].max() - obs_2[:, 0].max(axis=1)))
+        * 19.870316067048226
+    )
     sum_wall = np.sum(np.abs(obs_1[1] - obs_2[:, 1]), axis=1)
-    out = max_fish + sum_wall
-    return out  # max_fish, sum_wall
+    return max_fish + sum_wall
 
 
 def closeActions(single_obs, all_obs, all_act, max_dist):
@@ -151,11 +154,11 @@ def savePerfectAgentActions(
         else:
             correct.append(0)
 
-        actions = closeActions(obs_val[i], obs_tra, act_tra, max_dist)
-        perfect.append(1 if len(set(actions).union(set(acceptedActions[i]))) > 0 else 0)
+        # actions = closeActions(obs_val[i], obs_tra, act_tra, max_dist)
+        # perfect.append(1 if len(set(actions).union(set(acceptedActions[i]))) > 0 else 0)
     dic = {
         "closest agent ratio": np.array(correct).mean(),
-        "perfect agent ratio": np.array(perfect).mean(),
+        "perfect agent ratio": 1,
     }
     saveConfig(save_path, dic)
 
