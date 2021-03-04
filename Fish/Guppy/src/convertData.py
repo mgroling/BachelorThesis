@@ -12,7 +12,7 @@ from gym_guppy.wrappers.observation_wrapper import RayCastingWrapper
 from wrappers import DiscreteMatrixActionWrapper
 
 
-def getExpert(path, min_turn, min_dist, env):
+def getExpert(path, min_turn, min_dist, env, matrixMode = True):
     # we only need fish_x, fish_y, fish_orientation_radians, robo_x, robo_y, robo_orientation_radians
     ar = pd.read_csv(path).to_numpy()[:, [11, 12, 14, 5, 6, 8]].astype(np.float64)
     # convert x,y from cm to m
@@ -54,7 +54,11 @@ def getExpert(path, min_turn, min_dist, env):
     bin_turn = np.argmin(dist_turn, axis=1)
     bin_dist = np.argmin(dist_dist, axis=1)
 
-    chosen_action = bin_turn * len(env.speed_bins) + bin_dist
+    chosen_action = None
+    if matrixMode:
+        chosen_action = bin_turn * len(env.speed_bins) + bin_dist
+    else:
+        chosen_action = np.append(bin_turn.reshape(len(bin_turn), 1), bin_dist.reshape(len(bin_dist), 1), axis = 1)
 
     # turn_rate = np.floor(chosen_action / len(env.speed_bins)).astype(int)
     # speed = (chosen_action % len(env.speed_bins)).astype(int)
@@ -83,16 +87,16 @@ def getExpert(path, min_turn, min_dist, env):
     for i in range(0, len(ar)):
         rays[i] = env.observation(ar[i])
 
-    return rays, chosen_action.reshape((len(chosen_action), 1))
+    return rays, chosen_action.reshape((len(chosen_action), 1)) if matrixMode else chosen_action.reshape((len(chosen_action), 2))
 
 
-def getAll(paths, min_turn, min_dist, env):
+def getAll(paths, min_turn, min_dist, env, matrixMode = True):
     obs, act = [], []
     cc = 0
     for path in paths:
         temporary = pd.read_csv(path, sep=";")
         cc += len(temporary)
-        temp_obs, temp_act = getExpert(path, min_turn, min_dist, env)
+        temp_obs, temp_act = getExpert(path, min_turn, min_dist, env, matrixMode)
         obs.append(temp_obs)
         act.append(temp_act)
     print("timesteps count", cc)

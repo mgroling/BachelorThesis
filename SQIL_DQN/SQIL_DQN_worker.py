@@ -31,7 +31,7 @@ from rolloutEv import testExpert
 from functions import getAngle, testModel_
 
 
-class SQIL_DQN(DQN):
+class SQIL_DQN_worker(DQN):
     def _initializeExpertBuffer(self, obs, act):
         done = np.array([[False] for i in range(0, len(obs) - 1)])
         done[-1] = True
@@ -50,7 +50,9 @@ class SQIL_DQN(DQN):
     def learn(
         self,
         total_timesteps,
-        rollout_params,
+        model_coworker,
+        role,
+        rollout_params=None,
         callback=None,
         log_interval=100,
         tb_log_name="DQN",
@@ -64,7 +66,7 @@ class SQIL_DQN(DQN):
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         callback = self._init_callback(callback)
 
-        self.rollout_values = [[] for i in range(len(rollout_params["perc"]))]
+        # self.rollout_values = [[] for i in range(len(rollout_params["perc"]))]
 
         with SetVerbosity(self.verbose), TensorboardWriter(
             self.graph, self.tensorboard_log, tb_log_name, new_tb_log
@@ -102,7 +104,6 @@ class SQIL_DQN(DQN):
                 final_p=self.exploration_final_eps,
             )
 
-            rewardPer1000T = []
             episode_rewards = [0.0]
             episode_successes = []
 
@@ -116,30 +117,29 @@ class SQIL_DQN(DQN):
                 obs_ = self._vec_normalize_env.get_original_obs().squeeze()
 
             for _ in range(total_timesteps):
-                if rollout_timesteps is None or total_timesteps - _ < rollout_timesteps:
-                    if _ % 1000 == 0 and _ != 0 or _ == total_timesteps - 1:
-                        print("computing rollout values")
-                        for k, l in enumerate(rollout_params["perc"]):
-                            self.rollout_values[k].append(
-                                testExpert(
-                                    paths=[
-                                        "Fish/Guppy/validationData/" + elem
-                                        for elem in os.listdir(
-                                            "Fish/Guppy/validationData"
-                                        )
-                                    ],
-                                    model=self,
-                                    env=self.env,
-                                    exp_turn_fraction=rollout_params[
-                                        "exp_turn_fraction"
-                                    ],
-                                    exp_speed=rollout_params["exp_min_dist"],
-                                    perc=l,
-                                    deterministic=True,
-                                )
-                            )
+                # if rollout_timesteps is None or total_timesteps - _ < rollout_timesteps:
+                #     if _ % 1000 == 0 and _ != 0 or _ == total_timesteps - 1:
+                #         print("computing rollout values")
+                #         for k, l in enumerate(rollout_params["perc"]):
+                #             self.rollout_values[k].append(
+                #                 testExpert(
+                #                     paths=[
+                #                         "Fish/Guppy/validationData/" + elem
+                #                         for elem in os.listdir(
+                #                             "Fish/Guppy/validationData"
+                #                         )
+                #                     ],
+                #                     model=self,
+                #                     env=self.env,
+                #                     exp_turn_fraction=rollout_params[
+                #                         "exp_turn_fraction"
+                #                     ],
+                #                     exp_speed=rollout_params["exp_min_dist"],
+                #                     perc=l,
+                #                     deterministic=True,
+                #                 )
+                #             )
                 if _ % 1000 == 0 and _ != 0:
-                    print("timestep", _, "finished")
                     obs = self.env.reset()
                 if not train_plots is None:
                     if _ % train_plots == 0:
@@ -171,15 +171,22 @@ class SQIL_DQN(DQN):
                     action = self.act(
                         np.array(obs)[None], update_eps=update_eps, **kwargs
                     )[0]
-                env_action = action
+
+                turn, speed = None, None
+                if role == "turn":
+                    turn = action
+                    speed, _ = model_coworker.predict(np.array(obs))
+                else:
+                    turn, _ = model_coworker.predict(np.array(obs))
+                    speed = action
 
                 # check if next state (after action) would be outside of fish tank (CLIPPING)
                 env_state = self.env.get_state()
-                turn_dist = self.env.action(env_action)
-                global_turn = env_state[0][2] + turn_dist[0]
+                turn_speed = self.env.action([turn, speed])
+                global_turn = env_state[0][2] + turn_speed[0]
                 coords = [
-                    env_state[0][0] + turn_dist[1] * np.cos(global_turn),
-                    env_state[0][1] + turn_dist[1] * np.sin(global_turn),
+                    env_state[0][0] + turn_speed[1] * np.cos(global_turn),
+                    env_state[0][1] + turn_speed[1] * np.sin(global_turn),
                 ]
                 changed = False
                 if coords[0] < -0.49:
@@ -197,7 +204,7 @@ class SQIL_DQN(DQN):
                     changed = True
 
                 if changed:
-                    dist = np.sqrt(
+                    speed = np.sqrt(
                         np.power(coords[0] - env_state[0][0], 2)
                         + np.power(coords[1] - env_state[0][1], 2)
                     )
@@ -212,15 +219,19 @@ class SQIL_DQN(DQN):
                         turn = turn - 2 * np.pi
                     # convert to DQN output
                     dist_turn = np.abs(self.env.turn_rate_bins - turn)
-                    dist_dist = np.abs(self.env.speed_bins - dist)
+                    dist_speed = np.abs(self.env.speed_bins - speed)
 
-                    bin_turn = np.argmin(dist_turn, axis=0)
-                    bin_dist = np.argmin(dist_dist, axis=0)
+                    # convert to bins
+                    turn = np.argmin(dist_turn, axis=0)
+                    speed = np.argmin(dist_speed, axis=0)
 
-                    env_action = action = bin_turn * len(self.env.speed_bins) + bin_dist
+                    if role == "turn":
+                        action = turn
+                    else:
+                        action = speed
 
                 reset = False
-                new_obs, rew, done, info = self.env.step(env_action)
+                new_obs, rew, done, info = self.env.step([turn, speed])
 
                 self.num_timesteps += 1
 

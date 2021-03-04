@@ -36,6 +36,37 @@ class DiscreteMatrixActionWrapper(gym.ActionWrapper):
         raise NotImplementedError
 
 
+class DiscreteActionWrapper(gym.ActionWrapper):
+    def __init__(
+        self,
+        env,
+        num_bins_turn_rate=10,
+        num_bins_speed=10,
+        max_turn=np.pi / 4,
+        min_speed=0.03,
+        max_speed=0.1,
+        frequency=20,
+    ):
+        super(DiscreteActionWrapper, self).__init__(env)
+        assert isinstance(self.action_space, gym.spaces.Box)
+        self.turn_rate_bins = np.linspace(-max_turn, max_turn, num_bins_turn_rate)
+        self.speed_bins = np.linspace(min_speed, max_speed, num_bins_speed)
+        self.frequency = frequency
+
+        self.action_space = [
+            gym.spaces.Discrete(num_bins_turn_rate),
+            gym.spaces.Discrete(num_bins_speed),
+        ]
+
+    def action(self, action):
+        turn, speed = self.turn_rate_bins[action[0]], self.speed_bins[action[1]]
+
+        return [turn, speed * self.frequency]
+
+    def reverse_action(self, action):
+        raise NotImplementedError
+
+
 class VectorActionWrapper(gym.ActionWrapper):
     def __init__(self, env):
         super(VectorActionWrapper, self).__init__(env)
