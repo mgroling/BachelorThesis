@@ -52,15 +52,11 @@ class SQIL_DQN_worker(DQN):
         total_timesteps,
         model_coworker,
         role,
-        rollout_params=None,
         callback=None,
         log_interval=100,
         tb_log_name="DQN",
         reset_num_timesteps=True,
         replay_wrapper=None,
-        train_plots=None,
-        train_plots_path=None,
-        rollout_timesteps=None,
     ):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
@@ -117,34 +113,6 @@ class SQIL_DQN_worker(DQN):
                 obs_ = self._vec_normalize_env.get_original_obs().squeeze()
 
             for _ in range(total_timesteps):
-                # if rollout_timesteps is None or total_timesteps - _ < rollout_timesteps:
-                #     if _ % 1000 == 0 and _ != 0 or _ == total_timesteps - 1:
-                #         print("computing rollout values")
-                #         for k, l in enumerate(rollout_params["perc"]):
-                #             self.rollout_values[k].append(
-                #                 testExpert(
-                #                     paths=[
-                #                         "Fish/Guppy/validationData/" + elem
-                #                         for elem in os.listdir(
-                #                             "Fish/Guppy/validationData"
-                #                         )
-                #                     ],
-                #                     model=self,
-                #                     env=self.env,
-                #                     exp_turn_fraction=rollout_params[
-                #                         "exp_turn_fraction"
-                #                     ],
-                #                     exp_speed=rollout_params["exp_min_dist"],
-                #                     perc=l,
-                #                     deterministic=True,
-                #                 )
-                #             )
-                if _ % 1000 == 0 and _ != 0:
-                    obs = self.env.reset()
-                if not train_plots is None:
-                    if _ % train_plots == 0:
-                        testModel_(self, train_plots_path, rollout_params, _)
-
                 # Take action and update exploration to the newest value
                 kwargs = {}
                 if not self.param_noise:

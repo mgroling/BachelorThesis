@@ -3,6 +3,12 @@ from stable_baselines import DQN
 from stable_baselines.common.buffers import ReplayBuffer
 import numpy as np
 import os
+import sys
+
+from rolloutEv import testExpert
+
+sys.path.append("Fish")
+from functions import testModel_
 
 
 class SQIL_DQN_MANAGER:
@@ -37,6 +43,7 @@ class SQIL_DQN_MANAGER:
         for i in range(len(self._models)):
             self._models[i].action_space = env.action_space[i]
             self._models[i].setup_model()
+        self.env = env
 
     def initializeExpertBuffer(self, obs, act):
         for i in range(len(self._models)):
@@ -51,10 +58,12 @@ class SQIL_DQN_MANAGER:
         total_timesteps,
         sequential_timesteps,
         rollout_params=None,
+        rollout_timesteps=None,
+        rollout_deterministic=True,
         train_plots=None,
         train_plots_path=None,
-        rollout_timesteps=None,
     ):
+        self.rollout_values = [[] for i in range(len(rollout_params["perc"]))]
         for i in range(int(total_timesteps / sequential_timesteps)):
             # Train models in sequence for sequential_timesteps each
             # First model predicts turn values and second model predicts speed values
@@ -78,6 +87,28 @@ class SQIL_DQN_MANAGER:
                 rollout_timesteps=rollout_timesteps,
             )
 
+            if not rollout_params is None:
+                if rollout_timesteps is None or total_timesteps - i < rollout_timesteps:
+                    print("computing rollout values")
+                    for k, l in enumerate(rollout_params["perc"]):
+                        self.rollout_values[k].append(
+                            testExpert(
+                                paths=[
+                                    "Fish/Guppy/validationData/" + elem
+                                    for elem in os.listdir("Fish/Guppy/validationData")
+                                ],
+                                model=self,
+                                env=self.env,
+                                perc=l,
+                                deterministic=rollout_deterministic,
+                                convMat=True,
+                            )
+                        )
+
+            if not train_plots is None and not rollout_params is None:
+                if _ % train_plots == 0:
+                    testModel_(self, train_plots_path, rollout_params, i)
+
             print("timestep", (i + 1) * sequential_timesteps, "finished")
 
     def predict(self, observation, deterministic=True):
@@ -93,6 +124,10 @@ class SQIL_DQN_MANAGER:
         self._models[0].save(save_path + "/model_turn")
         self._models[1].save(save_path + "/model_speed")
 
-    def load(self, save_path):
-        self._models[0] = DQN.load(save_path + "/model_turn")
-        self._models[1] = DQN.load(save_path + "/model_speed")
+    @classmethod
+    def load(cls, save_path):
+        obj = cls.__new__(cls)
+        obj._models = [None, None]
+        obj._models[0] = DQN.load(save_path + "/model_turn")
+        obj._models[1] = DQN.load(save_path + "/model_speed")
+        return obj

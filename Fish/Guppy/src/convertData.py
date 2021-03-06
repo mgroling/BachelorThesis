@@ -12,7 +12,7 @@ from gym_guppy.wrappers.observation_wrapper import RayCastingWrapper
 from wrappers import DiscreteMatrixActionWrapper
 
 
-def getExpert(path, min_turn, min_dist, env, matrixMode = True):
+def getExpert(path, env, matrixMode=True):
     # we only need fish_x, fish_y, fish_orientation_radians, robo_x, robo_y, robo_orientation_radians
     ar = pd.read_csv(path).to_numpy()[:, [11, 12, 14, 5, 6, 8]].astype(np.float64)
     # convert x,y from cm to m
@@ -58,11 +58,11 @@ def getExpert(path, min_turn, min_dist, env, matrixMode = True):
     if matrixMode:
         chosen_action = bin_turn * len(env.speed_bins) + bin_dist
     else:
-        chosen_action = np.append(bin_turn.reshape(len(bin_turn), 1), bin_dist.reshape(len(bin_dist), 1), axis = 1)
-
-    # turn_rate = np.floor(chosen_action / len(env.speed_bins)).astype(int)
-    # speed = (chosen_action % len(env.speed_bins)).astype(int)
-    # turn, speed = env.turn_rate_bins[turn_rate], env.speed_bins[speed]
+        chosen_action = np.append(
+            bin_turn.reshape(len(bin_turn), 1),
+            bin_dist.reshape(len(bin_dist), 1),
+            axis=1,
+        )
 
     # fig, ax = plt.subplots(2, 2, figsize=(15, 15))
     # ax[0][0].hist(turn_dist[:, 0], bins=20, range=[-np.pi, np.pi])
@@ -74,6 +74,11 @@ def getExpert(path, min_turn, min_dist, env, matrixMode = True):
     # ax[1][1].hist(speed, bins=10, range=[0.01, 0.07])
     # ax[1][1].set_title("converted speed")
     # plt.show()
+
+    plt.hist(turn_dist[:, 0], bins=360, range=[-np.pi/2, np.pi/2])
+    plt.show()
+    plt.hist(turn_dist[:, 1], bins=30, range=[0, 0.03])
+    plt.show()
 
     # Get Raycasts
     # remove last row, cause we dont have turn/dist for it
@@ -87,16 +92,21 @@ def getExpert(path, min_turn, min_dist, env, matrixMode = True):
     for i in range(0, len(ar)):
         rays[i] = env.observation(ar[i])
 
-    return rays, chosen_action.reshape((len(chosen_action), 1)) if matrixMode else chosen_action.reshape((len(chosen_action), 2))
+    return (
+        rays,
+        chosen_action.reshape((len(chosen_action), 1))
+        if matrixMode
+        else chosen_action.reshape((len(chosen_action), 2)),
+    )
 
 
-def getAll(paths, min_turn, min_dist, env, matrixMode = True):
+def getAll(paths, env, matrixMode=True):
     obs, act = [], []
     cc = 0
     for path in paths:
         temporary = pd.read_csv(path, sep=";")
         cc += len(temporary)
-        temp_obs, temp_act = getExpert(path, min_turn, min_dist, env, matrixMode)
+        temp_obs, temp_act = getExpert(path, env, matrixMode)
         obs.append(temp_obs)
         act.append(temp_act)
     print("timesteps count", cc)

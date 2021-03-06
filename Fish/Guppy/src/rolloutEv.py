@@ -35,19 +35,23 @@ def closeActions(single_obs, all_obs, all_act, max_dist):
 
 
 def testExpert(
-    paths, model, env, exp_turn_fraction, exp_speed, perc, deterministic=True
+    paths,
+    model,
+    env,
+    perc,
+    deterministic=True,
+    convMat=False,
 ):
     turn_bins, speed_bins = len(env.turn_rate_bins), len(env.speed_bins)
-    obs, act = getAll(paths, np.pi / exp_turn_fraction, exp_speed, env)
+    obs, act = getAll(paths, env)
     obs, act = np.concatenate(obs, axis=0), np.concatenate(act, axis=0)
     reward = []
     random_reward = []
     acceptedActions = loadConfig(
-        "Fish/Guppy/rollout/pi_"
-        + str(exp_turn_fraction)
-        + "_"
-        + str(int(exp_speed * 100 // 10))
-        + str(int(exp_speed * 100 % 10))
+        "Fish/Guppy/rollout/tbins"
+        + str(turn_bins)
+        + "_sbins"
+        + str(speed_bins)
         + "/allowedActions_val_"
         + str(perc)
         + ".json"
@@ -55,6 +59,8 @@ def testExpert(
 
     for i in range(0, len(obs)):
         action, _ = model.predict(obs[i], deterministic=deterministic)
+        if convMat:
+            action = action[0] * speed_bins + action[1]
         if action in acceptedActions[i]:
             reward.append(1)
         else:
@@ -66,11 +72,10 @@ def testExpert(
             random_reward.append(0)
 
     dic = loadConfig(
-        "Fish/Guppy/rollout/pi_"
-        + str(exp_turn_fraction)
-        + "_"
-        + str(int(exp_speed * 100 // 10))
-        + str(int(exp_speed * 100 % 10))
+        "Fish/Guppy/rollout/tbins"
+        + str(turn_bins)
+        + "_sbins"
+        + str(speed_bins)
         + "/perfect_agent_"
         + str(perc)
         + ".json"
@@ -107,8 +112,8 @@ def saveDistributionThreshholds(obs_1, obs_2, save_path):
     plt.savefig(save_path + "distribution.png")
 
 
-def saveAllowedActions(paths, exp_turn, exp_speed, env, max_dist, save_path):
-    obs, act = getAll(paths, exp_turn, exp_speed, env)
+def saveAllowedActions(paths, env, max_dist, save_path):
+    obs, act = getAll(paths, env)
     obs, act = np.concatenate(obs, axis=0), np.concatenate(act, axis=0)
     actions = []
     for i in range(len(obs)):
@@ -116,8 +121,6 @@ def saveAllowedActions(paths, exp_turn, exp_speed, env, max_dist, save_path):
             print("timestep", i, "finished")
         actions.append(closeActions(obs[i], obs, act, max_dist))
     dic = {
-        "exp_turn": exp_turn,
-        "exp_speed": exp_speed,
         "max_dist": max_dist,
         "allowed actions": actions,
     }
@@ -125,20 +128,20 @@ def saveAllowedActions(paths, exp_turn, exp_speed, env, max_dist, save_path):
 
 
 def savePerfectAgentActions(
-    paths_val, paths_tra, exp_turn_fraction, exp_speed, env, save_path, perc
+    paths_val, paths_tra, env, save_path, perc
 ):
-    obs_val, act_val = getAll(paths_val, np.pi / exp_turn_fraction, exp_speed, env)
+    turn_bins, speed_bins = len(env.turn_rate_bins), len(env.speed_bins)
+    obs_val, act_val = getAll(paths_val, env)
     obs_val, act_val = np.concatenate(obs_val, axis=0), np.concatenate(act_val, axis=0)
-    obs_tra, act_tra = getAll(paths_tra, np.pi / exp_turn_fraction, exp_speed, env)
+    obs_tra, act_tra = getAll(paths_tra, env)
     obs_tra, act_tra = np.concatenate(obs_tra, axis=0), np.concatenate(act_tra, axis=0)
     correct = []
     perfect = []
     dic = loadConfig(
-        "Fish/Guppy/rollout/pi_"
-        + str(exp_turn_fraction)
-        + "_"
-        + str(int(exp_speed * 100 // 10))
-        + str(int(exp_speed * 100 % 10))
+        "Fish/Guppy/rollout/tbins"
+        + str(turn_bins)
+        + "_sbins"
+        + str(speed_bins)
         + "/allowedActions_val_"
         + str(perc)
         + ".json"

@@ -12,7 +12,7 @@ from wrappers import DiscreteMatrixActionWrapper, RayCastingWrapper, RayCastingO
 from stable_baselines.common.policies import MlpPolicy
 from stable_baselines.deepq.policies import FeedForwardPolicy
 from _marc_guppy import MarcGuppy
-from convertData import *
+from convertData import getAll
 from rolloutEv import *
 
 sys.path.append("Fish")
@@ -235,12 +235,9 @@ def createRolloutFiles(dic):
     DEGREES, NUM_RAYS = dic["degrees"], dic["num_bins_rays"]
     TURN_BINS, SPEED_BINS = dic["turn_bins"], dic["speed_bins"]
     MAX_TURN, MIN_SPEED, MAX_SPEED = dic["max_turn"], dic["min_speed"], dic["max_speed"]
-    EXP_TURN_FRACTION, EXP_SPEED = dic["exp_turn_fraction"], dic["exp_min_dist"]
-    EXP_TURN = np.pi / EXP_TURN_FRACTION
     PERC = dic["perc"]
 
     env = TestEnv()
-
     env = RayCastingWrapper(env, degrees=DEGREES, num_bins=NUM_RAYS)
     env = DiscreteMatrixActionWrapper(
         env,
@@ -252,12 +249,7 @@ def createRolloutFiles(dic):
     )
 
     folder = (
-        "Fish/Guppy/rollout/pi_"
-        + str(EXP_TURN_FRACTION)
-        + "_"
-        + str(int(EXP_SPEED * 100 // 10))
-        + str(int(EXP_SPEED * 100 % 10))
-        + "/"
+        "Fish/Guppy/rollout/tbins" + str(TURN_BINS) + "_sbins" + str(SPEED_BINS) + "/"
     )
 
     if not os.path.exists(folder[:-1]):
@@ -267,8 +259,6 @@ def createRolloutFiles(dic):
     if not os.path.isfile(folder + "distribution_threshholds.json"):
         obs, act = getAll(
             ["Fish/Guppy/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.csv"],
-            EXP_TURN,
-            EXP_SPEED,
             env,
         )
         obs = np.concatenate(obs, axis=0)
@@ -285,8 +275,6 @@ def createRolloutFiles(dic):
                     "Fish/Guppy/validationData/" + elem
                     for elem in os.listdir("Fish/Guppy/validationData")
                 ],
-                exp_turn=EXP_TURN,
-                exp_speed=EXP_SPEED,
                 env=env,
                 max_dist=max_dist,
                 save_path=folder + "allowedActions_val_" + str(perc) + ".json",
@@ -303,8 +291,6 @@ def createRolloutFiles(dic):
                 paths_tra=[
                     "Fish/Guppy/data/" + elem for elem in os.listdir("Fish/Guppy/data")
                 ],
-                exp_turn_fraction=EXP_TURN_FRACTION,
-                exp_speed=EXP_SPEED,
                 env=env,
                 save_path=folder + "perfect_agent_" + str(perc) + ".json",
                 perc=perc,
@@ -338,23 +324,21 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-    # env = TestEnv()
-    # env = RayCastingWrapper(env, degrees=360, num_bins=36)
-    # env = DiscreteMatrixActionWrapper(
-    #     env,
-    #     num_bins_turn_rate=20,
-    #     num_bins_speed=10,
-    #     max_turn=np.pi,
-    #     min_speed=0.00,
-    #     max_speed=0.05,
-    # )
-    # obs, act = getAll(
-    #     ["Fish/Guppy/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.csv"],
-    #     np.pi / 4,
-    #     0.00,
-    #     env,
-    # )
+    # main()
+    env = TestEnv()
+    env = RayCastingWrapper(env, degrees=360, num_bins=36)
+    env = DiscreteMatrixActionWrapper(
+        env,
+        num_bins_turn_rate=20,
+        num_bins_speed=10,
+        max_turn=np.pi,
+        min_speed=0.00,
+        max_speed=0.03,
+    )
+    obs, act = getAll(
+        ["Fish/Guppy/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.csv"],
+        env,
+    )
     # # [
     # #         "Fish/Guppy/validationData/" + elem
     # #         for elem in os.listdir("Fish/Guppy/validationData")
