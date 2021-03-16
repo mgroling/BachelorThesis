@@ -10,28 +10,67 @@ sys.path.append("Fish")
 from convertData import getAll
 
 
-def distObs(obs_1, obs_2):
-    diff_bin = np.abs(np.argmax(obs_1[0]) - np.argmax(obs_2[:, 0], axis=1)) + 1
-    diff_bin = np.where(
-        diff_bin > len(obs_1[0]) / 2, len(obs_1[0]) - diff_bin, diff_bin
-    )
-    max_fish = (
-        diff_bin
-        * (np.abs(obs_1[0].max() - obs_2[:, 0].max(axis=1)))
-        * 19.870316067048226
-    )
-    sum_wall = np.sum(np.abs(obs_1[1] - obs_2[:, 1]), axis=1)
-    return max_fish + sum_wall
+def distObs(obs_1, obs_2, env):
+    return distFish(obs_1, obs_2, env) + distWall(obs_1, obs_2, env)
 
 
-def closeActions(single_obs, all_obs, all_act, max_dist):
+def distWall(obs_1, obs_2, env):
+    return np.sum(np.abs(obs_1[1] - obs_2[:, 1]), axis=1)
+
+
+def distFish(obs_1, obs_2, env):
+    index_1, index_2 = obs_1[0].argmax(), obs_2[:, 0].argmax(axis=1)
+    direction_1, direction_2 = (
+        env.sector_bounds[index_1] + env.sector_bounds[index_1 + 1]
+    ) / 2, (env.sector_bounds[index_2] + env.sector_bounds[index_2 + 1]) / 2
+    pos_1 = np.array(
+        [
+            (1 - obs_1[0].max()) * np.cos(direction_1) * 1.5556349186104048,
+            (1 - obs_1[0].max()) * np.sin(direction_1) * 1.5556349186104048,
+        ]
+    )
+    pos_2 = np.array(
+        [
+            (1 - obs_2[:, 0].max(axis=1)) * np.cos(direction_2) * 1.5556349186104048,
+            (1 - obs_2[:, 0].max(axis=1)) * np.sin(direction_2) * 1.5556349186104048,
+        ]
+    )
+    pos_2 = np.swapaxes(pos_2, 0, 1)
+    distance = np.linalg.norm(pos_1 - pos_2, axis=1)
+    return distance
+
+
+def closeActions(single_obs, all_obs, all_act, max_dist, env):
     """
     returns all actions of states that have a distance of less than max_dist between them and single_obs
     """
-    temp = distObs(single_obs, all_obs)
+    temp = distObs(single_obs, all_obs, env)
     actions = set(np.where(temp < max_dist, all_act.reshape((len(all_act),)), None))
     actions.remove(None)
     return list(actions)
+
+
+def checkAction(action, allowedActions, env):
+    maxTurnDiff, maxSpeedDiff = 0.0872665, 0.003
+
+    allowedActions = np.array(allowedActions)
+    turn, speed = (
+        env.turn_rate_bins[action // len(env.speed_bins)],
+        env.speed_bins[action % len(env.speed_bins)],
+    )
+    allowedTurn, allowedSpeed = (
+        env.turn_rate_bins[np.floor(allowedActions / len(env.speed_bins)).astype(int)],
+        env.speed_bins[(allowedActions % len(env.speed_bins)).astype(int)],
+    )
+    distTurn, distSpeed = (
+        np.abs(turn - allowedTurn).min(),
+        np.abs(speed - allowedSpeed).min(),
+    )
+
+    if distTurn <= maxTurnDiff and distSpeed <= maxSpeedDiff:
+        return True
+    else:
+        return False
 
 
 def testExpert(
@@ -61,12 +100,12 @@ def testExpert(
         action, _ = model.predict(obs[i], deterministic=deterministic)
         if convMat:
             action = action[0] * speed_bins + action[1]
-        if action in acceptedActions[i]:
+        if checkAction(action, acceptedActions[i], env):
             reward.append(1)
         else:
             reward.append(0)
         rand = random.randint(0, turn_bins * speed_bins - 1)
-        if rand in acceptedActions[i]:
+        if checkAction(rand, acceptedActions[i], env):
             random_reward.append(1)
         else:
             random_reward.append(0)
@@ -89,12 +128,12 @@ def testExpert(
     )
 
 
-def saveDistributionThreshholds(obs_1, obs_2, save_path):
+def saveDistributionThreshholds(obs_1, obs_2, save_path, env):
     distances = []
     for i in range(len(obs_1)):
         if i % 1000 == 0:
             print("timestep", i, "finished")
-        distances.extend(distObs(obs_1[i], obs_2))
+        distances.extend(distObs(obs_1[i], obs_2, env))
     distances.sort()
     percentage, threshhold = np.arange(1, 21), []
     percentage = [int(i) for i in percentage]
@@ -105,7 +144,7 @@ def saveDistributionThreshholds(obs_1, obs_2, save_path):
         "threshhold": threshhold,
     }
     saveConfig(save_path + "distribution_threshholds.json", dic)
-    plt.hist(distances, bins=100)
+    plt.hist(distances, bins=100, range=[0, 50], density=True)
     plt.title("distribution of distances")
     plt.xlabel("distance")
     plt.ylabel("# elements")
@@ -119,7 +158,7 @@ def saveAllowedActions(paths, env, max_dist, save_path):
     for i in range(len(obs)):
         if i % 1000 == 0:
             print("timestep", i, "finished")
-        actions.append(closeActions(obs[i], obs, act, max_dist))
+        actions.append(closeActions(obs[i], obs, act, max_dist, env))
     dic = {
         "max_dist": max_dist,
         "allowed actions": actions,
@@ -127,9 +166,7 @@ def saveAllowedActions(paths, env, max_dist, save_path):
     saveConfig(save_path, dic)
 
 
-def savePerfectAgentActions(
-    paths_val, paths_tra, env, save_path, perc
-):
+def savePerfectAgentActions(paths_val, paths_tra, env, save_path, perc):
     turn_bins, speed_bins = len(env.turn_rate_bins), len(env.speed_bins)
     obs_val, act_val = getAll(paths_val, env)
     obs_val, act_val = np.concatenate(obs_val, axis=0), np.concatenate(act_val, axis=0)
@@ -151,8 +188,8 @@ def savePerfectAgentActions(
     for i in range(len(obs_val)):
         if i % 1000 == 0:
             print("timestep", i, "finished")
-        actions = act_tra[distObs(obs_val[i], obs_tra).argmin()]
-        if int(actions) in acceptedActions[i]:
+        action = act_tra[distObs(obs_val[i], obs_tra, env).argmin()]
+        if checkAction(int(action), acceptedActions[i], env):
             correct.append(1)
         else:
             correct.append(0)

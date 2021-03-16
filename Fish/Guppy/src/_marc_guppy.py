@@ -15,8 +15,7 @@ from gym_guppy import (
 )
 from gym_guppy.tools.math import ray_casting_walls, compute_dist_bins
 
-# sys.path.append("SQIL_DQN")
-# from SQIL_DQN_manager import *
+from stable_baselines import DQN
 
 
 class MarcGuppy(TurnSpeedGuppy, TurnSpeedRobot):
@@ -24,8 +23,8 @@ class MarcGuppy(TurnSpeedGuppy, TurnSpeedRobot):
 
     def __init__(self, model_path=None, model=None, dic=None, **kwargs):
         super(MarcGuppy, self).__init__(**kwargs)
-        if model_path is None and model is None and dic is None:
-            logging.exception("Either model_path or model and dic have to be given.")
+        if model_path is None and (model is None or dic is None):
+            logging.exception("Either model_path or model and dic have to be specified.")
         elif not model_path is None and not model is None:
             logging.exception("Specify either model_path or model, not both.")
 
@@ -85,15 +84,17 @@ class MarcGuppy(TurnSpeedGuppy, TurnSpeedRobot):
 class MarcGuppyDuo(TurnSpeedGuppy, TurnSpeedRobot):
     _frequency = 20
 
-    def __init__(self, model_path=None, model=None, dic=None, **kwargs):
-        super(MarcGuppy, self).__init__(**kwargs)
+    def __init__(
+        self, model_path=None, model=None, dic=None, deterministic=True, **kwargs
+    ):
+        super(MarcGuppyDuo, self).__init__(**kwargs)
         if model_path is None and model is None and dic is None:
             logging.exception("Either model_path or model and dic have to be given.")
         elif not model_path is None and not model is None:
             logging.exception("Specify either model_path or model, not both.")
 
         if model is None:
-            self._model = DQN.load(model_path + "model")
+            self._model = Model(model_path + "model")
         else:
             self._model = model
         if dic is None:
@@ -107,6 +108,8 @@ class MarcGuppyDuo(TurnSpeedGuppy, TurnSpeedRobot):
         max_turn_rate = dic["max_turn"]
         min_speed = dic["min_speed"]
         max_speed = dic["max_speed"]
+
+        self.deterministic = deterministic
 
         self._turn_rate_bins = np.linspace(
             min_turn_rate, max_turn_rate, num_bins_turn_rate
@@ -135,14 +138,36 @@ class MarcGuppyDuo(TurnSpeedGuppy, TurnSpeedRobot):
                 state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
             )
 
-        action, _ = self._model.predict(self.obs_placeholder, deterministic=True)
+        action, _ = self._model.predict(
+            self.obs_placeholder, deterministic=self.deterministic
+        )
 
-        turn_rate = math.floor(action / len(self._speed_bins))
-        speed = action % len(self._speed_bins)
-        turn, speed = self._turn_rate_bins[turn_rate], self._speed_bins[speed]
+        turn, speed = self._turn_rate_bins[action[0]], self._speed_bins[action[1]]
 
         self.turn = turn
         self.speed = speed * self._frequency
+
+    def step(self, time_step):
+        self.set_angular_velocity(0)
+        if self.turn:
+            self._body.angle += self.turn
+            self.__turn = None
+        if self.speed:
+            self.set_linear_velocity([self.speed, 0.0], local=True)
+            self.__speed = None
+
+
+class Model:
+    def __init__(self, path):
+        self._models = [None, None]
+        self._models[0] = DQN.load(path + "/model_turn")
+        self._models[1] = DQN.load(path + "/model_speed")
+
+    def predict(self, observation, deterministic=True):
+        turn, _ = self._models[0].predict(observation, deterministic=deterministic)
+        speed, _ = self._models[1].predict(observation, deterministic=deterministic)
+
+        return [turn, speed], None
 
 
 def saveConfig(path, dic):
@@ -153,68 +178,3 @@ def saveConfig(path, dic):
 def loadConfig(path):
     with open(path, "r") as f:
         return json.load(f)
-
-
-def getAngle(vector1, vector2, mode="degrees"):
-    """
-    Given 2 vectors, in the form of tuples (x1, y1) this will return an angle in degrees, if not specfified further.
-    If mode is anything else than "degrees", it will return angle in radians
-    30° on the right are actually 30° and 30° on the left are 330° (relative to vector1).
-    """
-    # Initialize an orthogonal vector, that points to the right of your first vector.
-    orth_vector1 = (vector1[1], -vector1[0])
-
-    # Calculate angle between vector1 and vector2 (however this will only yield angles between 0° and 180° (the shorter one))
-    temp = np.dot(vector1, vector2) / np.linalg.norm(vector1) / np.linalg.norm(vector2)
-    angle = np.degrees(np.arccos(np.clip(temp, -1, 1)))
-
-    # Calculate angle between orth_vector1 and vector2 (so we can get a degree between 0° and 360°)
-    temp_orth = (
-        np.dot(orth_vector1, vector2)
-        / np.linalg.norm(orth_vector1)
-        / np.linalg.norm(vector2)
-    )
-    angle_orth = np.degrees(np.arccos(np.clip(temp_orth, -1, 1)))
-
-    # It is on the left side of our vector
-    if angle_orth < 90:
-        angle = 360 - angle
-
-    return angle if mode == "degrees" else math.radians(angle)
-
-
-# # check if action would lead fish outside of tank
-# global_turn = state[0][2] + turn
-# coords = [
-#     state[0][0] + speed * np.cos(global_turn),
-#     state[0][1] + speed * np.sin(global_turn),
-# ]
-# changed = False
-# if coords[0] < -0.49:
-#     coords[0] = -0.47
-#     changed = True
-# elif coords[0] > 0.49:
-#     coords[0] = 0.47
-#     changed = True
-
-# if coords[1] < -0.49:
-#     coords[1] = -0.47
-#     changed = True
-# elif coords[1] > 0.49:
-#     coords[1] = 0.47
-#     changed = True
-
-# if changed:
-#     speed = np.sqrt(
-#         np.power(coords[0] - state[0][0], 2)
-#         + np.power(coords[1] - state[0][1], 2)
-#     )
-#     temp_x, temp_y = (
-#         state[0][0] + 0.1 * np.cos(state[0][2]),
-#         state[0][1] + 0.1 * np.sin(state[0][2]),
-#     )
-#     look_vec = temp_x - state[0][0], temp_y - state[0][1]
-#     move_vec = coords[0] - state[0][0], coords[1] - state[0][1]
-#     turn = getAngle(look_vec, move_vec, mode="radians")
-#     if turn > np.pi:
-#         turn = turn - 2 * np.pi

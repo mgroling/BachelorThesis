@@ -28,7 +28,7 @@ import sys
 
 sys.path.append("Fish")
 from rolloutEv import testExpert
-from functions import getAngle, testModel_
+from functions import testModel_
 
 
 class SQIL_DQN(DQN):
@@ -197,27 +197,22 @@ class SQIL_DQN(DQN):
                     changed = True
 
                 if changed:
-                    dist = np.sqrt(
-                        np.power(coords[0] - env_state[0][0], 2)
-                        + np.power(coords[1] - env_state[0][1], 2)
-                    )
-                    temp_x, temp_y = (
-                        env_state[0][0] + 0.1 * np.cos(env_state[0][2]),
-                        env_state[0][1] + 0.1 * np.sin(env_state[0][2]),
-                    )
-                    look_vec = temp_x - env_state[0][0], temp_y - env_state[0][1]
-                    move_vec = coords[0] - env_state[0][0], coords[1] - env_state[0][1]
-                    turn = getAngle(look_vec, move_vec, mode="radians")
-                    if turn > np.pi:
-                        turn = turn - 2 * np.pi
+                    diff = coords - env_state[0, :2]
+                    speed = np.linalg.norm(diff)
+                    angles = np.arctan2(diff[1], diff[0])
+                    turn = angles - env_state[0, 2]
+                    turn = turn - 2 * np.pi if turn > np.pi else turn
+                    turn = turn + 2 * np.pi if turn < -np.pi else turn
+
                     # convert to DQN output
                     dist_turn = np.abs(self.env.turn_rate_bins - turn)
-                    dist_dist = np.abs(self.env.speed_bins - dist)
+                    dist_speed = np.abs(self.env.speed_bins - speed)
 
-                    bin_turn = np.argmin(dist_turn, axis=0)
-                    bin_dist = np.argmin(dist_dist, axis=0)
+                    # convert to bins
+                    turn = np.argmin(dist_turn, axis=0)
+                    speed = np.argmin(dist_speed, axis=0)
 
-                    env_action = action = bin_turn * len(self.env.speed_bins) + bin_dist
+                    env_action = action = turn * len(self.env.speed_bins) + speed
 
                 reset = False
                 new_obs, rew, done, info = self.env.step(env_action)

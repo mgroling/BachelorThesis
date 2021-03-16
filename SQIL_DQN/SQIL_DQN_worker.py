@@ -4,6 +4,8 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import gym
+import os
+import sys
 import matplotlib.pyplot as plt
 
 from stable_baselines import logger
@@ -22,13 +24,6 @@ from stable_baselines.deepq.policies import DQNPolicy
 from stable_baselines import DQN
 
 from skimage.measure import block_reduce
-
-import os
-import sys
-
-sys.path.append("Fish")
-from rolloutEv import testExpert
-from functions import getAngle, testModel_
 
 
 class SQIL_DQN_worker(DQN):
@@ -61,8 +56,6 @@ class SQIL_DQN_worker(DQN):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         callback = self._init_callback(callback)
-
-        # self.rollout_values = [[] for i in range(len(rollout_params["perc"]))]
 
         with SetVerbosity(self.verbose), TensorboardWriter(
             self.graph, self.tensorboard_log, tb_log_name, new_tb_log
@@ -152,10 +145,12 @@ class SQIL_DQN_worker(DQN):
                 env_state = self.env.get_state()
                 turn_speed = self.env.action([turn, speed])
                 global_turn = env_state[0][2] + turn_speed[0]
-                coords = [
-                    env_state[0][0] + turn_speed[1] * np.cos(global_turn),
-                    env_state[0][1] + turn_speed[1] * np.sin(global_turn),
-                ]
+                coords = np.array(
+                    [
+                        env_state[0][0] + turn_speed[1] * np.cos(global_turn),
+                        env_state[0][1] + turn_speed[1] * np.sin(global_turn),
+                    ]
+                )
                 changed = False
                 if coords[0] < -0.49:
                     coords[0] = -0.47
@@ -172,19 +167,13 @@ class SQIL_DQN_worker(DQN):
                     changed = True
 
                 if changed:
-                    speed = np.sqrt(
-                        np.power(coords[0] - env_state[0][0], 2)
-                        + np.power(coords[1] - env_state[0][1], 2)
-                    )
-                    temp_x, temp_y = (
-                        env_state[0][0] + 0.1 * np.cos(env_state[0][2]),
-                        env_state[0][1] + 0.1 * np.sin(env_state[0][2]),
-                    )
-                    look_vec = temp_x - env_state[0][0], temp_y - env_state[0][1]
-                    move_vec = coords[0] - env_state[0][0], coords[1] - env_state[0][1]
-                    turn = getAngle(look_vec, move_vec, mode="radians")
-                    if turn > np.pi:
-                        turn = turn - 2 * np.pi
+                    diff = coords - env_state[0, :2]
+                    speed = np.linalg.norm(diff)
+                    angles = np.arctan2(diff[1], diff[0])
+                    turn = angles - env_state[0, 2]
+                    turn = turn - 2 * np.pi if turn > np.pi else turn
+                    turn = turn + 2 * np.pi if turn < -np.pi else turn
+
                     # convert to DQN output
                     dist_turn = np.abs(self.env.turn_rate_bins - turn)
                     dist_speed = np.abs(self.env.speed_bins - speed)

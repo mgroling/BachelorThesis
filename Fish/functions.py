@@ -50,34 +50,6 @@ class TestEnv(GuppyEnv):
             )
 
 
-def getAngle(vector1, vector2, mode="degrees"):
-    """
-    Given 2 vectors, in the form of tuples (x1, y1) this will return an angle in degrees, if not specfified further.
-    If mode is anything else than "degrees", it will return angle in radians
-    30° on the right are actually 30° and 30° on the left are 330° (relative to vector1).
-    """
-    # Initialize an orthogonal vector, that points to the right of your first vector.
-    orth_vector1 = (vector1[1], -vector1[0])
-
-    # Calculate angle between vector1 and vector2 (however this will only yield angles between 0° and 180° (the shorter one))
-    temp = np.dot(vector1, vector2) / np.linalg.norm(vector1) / np.linalg.norm(vector2)
-    angle = np.degrees(np.arccos(np.clip(temp, -1, 1)))
-
-    # Calculate angle between orth_vector1 and vector2 (so we can get a degree between 0° and 360°)
-    temp_orth = (
-        np.dot(orth_vector1, vector2)
-        / np.linalg.norm(orth_vector1)
-        / np.linalg.norm(vector2)
-    )
-    angle_orth = np.degrees(np.arccos(np.clip(temp_orth, -1, 1)))
-
-    # It is on the left side of our vector
-    if angle_orth < 90:
-        angle = 360 - angle
-
-    return angle if mode == "degrees" else math.radians(angle)
-
-
 def testModel_(model, path, dic, timestep):
     if path is None:
         print("path is missing")

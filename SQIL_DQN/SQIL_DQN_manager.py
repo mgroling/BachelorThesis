@@ -25,6 +25,7 @@ class SQIL_DQN_MANAGER:
         buffer_size,
         exploration_fraction,
         batch_size,
+        seed=37,
     ):
         self._models = [
             SQIL_DQN_worker(
@@ -41,7 +42,8 @@ class SQIL_DQN_MANAGER:
             for i in range(2)
         ]
         for i in range(len(self._models)):
-            self._models[i].action_space = env.action_space[i]
+            self._models[i].action_space = env.action_space.space[i]
+            self._models[i].seed = seed
             self._models[i].setup_model()
         self.env = env
 
@@ -69,26 +71,21 @@ class SQIL_DQN_MANAGER:
             # First model predicts turn values and second model predicts speed values
             self._models[0].learn(
                 total_timesteps=sequential_timesteps,
-                rollout_params=rollout_params,
                 model_coworker=self._models[1],
                 role="turn",
-                train_plots=train_plots,
-                train_plots_path=train_plots_path,
-                rollout_timesteps=rollout_timesteps,
             )
 
             self._models[1].learn(
                 total_timesteps=sequential_timesteps,
-                rollout_params=rollout_params,
                 model_coworker=self._models[0],
                 role="speed",
-                train_plots=train_plots,
-                train_plots_path=train_plots_path,
-                rollout_timesteps=rollout_timesteps,
             )
 
             if not rollout_params is None:
-                if rollout_timesteps is None or total_timesteps - i < rollout_timesteps:
+                if (
+                    rollout_timesteps is None
+                    or total_timesteps // sequential_timesteps - i <= rollout_timesteps
+                ):
                     print("computing rollout values")
                     for k, l in enumerate(rollout_params["perc"]):
                         self.rollout_values[k].append(
@@ -115,7 +112,7 @@ class SQIL_DQN_MANAGER:
         turn, _ = self._models[0].predict(observation, deterministic=deterministic)
         speed, _ = self._models[1].predict(observation, deterministic=deterministic)
 
-        return [turn, speed], _
+        return [turn, speed], None
 
     def save(self, save_path):
         if not os.path.exists(save_path):

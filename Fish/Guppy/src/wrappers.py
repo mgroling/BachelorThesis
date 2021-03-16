@@ -36,6 +36,46 @@ class DiscreteMatrixActionWrapper(gym.ActionWrapper):
         raise NotImplementedError
 
 
+class DiscreteMatrixActionWrapperCustomBins(gym.ActionWrapper):
+    def __init__(
+        self,
+        env,
+        num_bins_turn_rate=10,
+        num_bins_speed=10,
+        max_turn=np.pi / 4,
+        min_speed=0.03,
+        max_speed=0.1,
+    ):
+        super(DiscreteMatrixActionWrapperCustomBins, self).__init__(env)
+        assert isinstance(self.action_space, gym.spaces.Box)
+        self.turn_rate_bins = np.linspace(-max_turn, max_turn, num_bins_turn_rate)
+        self.speed_bins = np.linspace(min_speed, max_speed, num_bins_speed)
+
+        self.action_space = gym.spaces.Discrete(num_bins_turn_rate * num_bins_speed)
+
+    def action(self, action):
+        turn_rate = math.floor(action / len(self.speed_bins))
+        speed = action % len(self.speed_bins)
+        turn, speed = self.turn_rate_bins[turn_rate], self.speed_bins[speed]
+
+        return [turn, speed]
+
+    def reverse_action(self, action):
+        raise NotImplementedError
+
+
+class ActionSpaceHolder:
+    def __init__(self, one, two):
+        self.space = [
+            gym.spaces.Discrete(one),
+            gym.spaces.Discrete(two),
+        ]
+
+    def seed(self, seed):
+        for space in self.space:
+            space.seed(seed)
+
+
 class DiscreteActionWrapper(gym.ActionWrapper):
     def __init__(
         self,
@@ -53,10 +93,7 @@ class DiscreteActionWrapper(gym.ActionWrapper):
         self.speed_bins = np.linspace(min_speed, max_speed, num_bins_speed)
         self.frequency = frequency
 
-        self.action_space = [
-            gym.spaces.Discrete(num_bins_turn_rate),
-            gym.spaces.Discrete(num_bins_speed),
-        ]
+        self.action_space = ActionSpaceHolder(num_bins_turn_rate, num_bins_speed)
 
     def action(self, action):
         turn, speed = self.turn_rate_bins[action[0]], self.speed_bins[action[1]]
@@ -81,7 +118,7 @@ class VectorActionWrapper(gym.ActionWrapper):
 
 
 class RayCastingWrapper(gym.ObservationWrapper):
-    def __init__(self, env, degrees=360, num_bins=36 * 2):
+    def __init__(self, env, degrees=360, num_bins=36):
         super(RayCastingWrapper, self).__init__(env)
         # redefine observation space
         self.observation_space = gym.spaces.Box(
@@ -92,7 +129,6 @@ class RayCastingWrapper(gym.ObservationWrapper):
         self.cutoff = np.radians(degrees) / 2.0
         self.sector_bounds = np.linspace(-self.cutoff, self.cutoff, num_bins + 1)
         self.ray_directions = np.linspace(-self.cutoff, self.cutoff, num_bins)
-
         # TODO: is this faster than just recreating the array?
         self.obs_placeholder = np.empty(self.observation_space.shape)
 

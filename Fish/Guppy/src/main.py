@@ -258,11 +258,11 @@ def createRolloutFiles(dic):
     """ Distribution Threshholds"""
     if not os.path.isfile(folder + "distribution_threshholds.json"):
         obs, act = getAll(
-            ["Fish/Guppy/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.csv"],
+            ["Fish/Guppy/validationData/Q12I_Fri_Dec__6_11_59_34_2019_Robotracker.csv"],
             env,
         )
         obs = np.concatenate(obs, axis=0)
-        saveDistributionThreshholds(obs, obs, folder)
+        saveDistributionThreshholds(obs, obs, folder, env)
 
     """ Allowed Actions """
     for perc in PERC:
@@ -324,21 +324,21 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    env = TestEnv()
-    env = RayCastingWrapper(env, degrees=360, num_bins=36)
-    env = DiscreteMatrixActionWrapper(
-        env,
-        num_bins_turn_rate=20,
-        num_bins_speed=10,
-        max_turn=np.pi,
-        min_speed=0.00,
-        max_speed=0.03,
-    )
-    obs, act = getAll(
-        ["Fish/Guppy/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.csv"],
-        env,
-    )
+    main()
+    # env = TestEnv()
+    # env = RayCastingWrapper(env, degrees=360, num_bins=36)
+    # env = DiscreteMatrixActionWrapper(
+    #     env,
+    #     num_bins_turn_rate=20,
+    #     num_bins_speed=10,
+    #     max_turn=np.pi,
+    #     min_speed=0.00,
+    #     max_speed=0.03,
+    # )
+    # obs, act = getAll(
+    #     ["Fish/Guppy/validationData/Q19A_Fri_Dec__6_14_57_14_2019_Robotracker.csv"],
+    #     env,
+    # )
     # # [
     # #         "Fish/Guppy/validationData/" + elem
     # #         for elem in os.listdir("Fish/Guppy/validationData")
