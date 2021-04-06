@@ -8,18 +8,85 @@ import gym
 
 from robofish.evaluate import *
 from conversion_scripts.convert_marc import convertTrajectory
-
-sys.path.append("Fish")
-from wrappers import RayCastingObject, DiscreteMatrixActionWrapper
+from scipy.spatial import cKDTree
 
 sys.path.append("gym-guppy")
 from gym_guppy import (
     GuppyEnv,
     TurnSpeedRobot,
     BoostCouzinGuppy,
+    TurnSpeedGuppy,
+    GlobalTargetRobot,
 )
 
-from _marc_guppy import MarcGuppy
+# from _marc_guppy import MarcGuppy
+
+
+class ApproachLeadGuppy(TurnSpeedGuppy, TurnSpeedRobot):
+    """ Approach Lead Guppy for one partner fish, simplified version of https://arxiv.org/abs/2009.06633 """
+
+    _frequency = 20
+
+    def __init__(self, **kwargs):
+        super(ApproachLeadGuppy, self).__init__(**kwargs)
+        self.mode = "approach"
+        self.target_points = np.array(
+            [[0.4, -0.4], [0.4, 0.4], [-0.4, 0.4], [-0.4, -0.4]]
+        )
+        self.current_target = 0
+        # speed is 1 cm/timestep
+        self.constant_speed = 0.005
+        # max turn is 5°/timestep
+        self.max_turn = 0.0174533
+
+    def compute_next_action(self, state: np.ndarray, kd_tree: cKDTree = None):
+        if not (len(state) == 1 or self.id == 0):
+            temp = state.copy()
+            state[0] = state[self.id]
+            state[self.id] = temp[0]
+        state[0][2] = state[0][2] % (2 * np.pi)
+        diff = np.diff(state, axis=0)
+        iid = np.linalg.norm(diff[0, :2])
+        # close enough to partner fish, go into lead mode
+        if iid < 0.12 and self.mode == "approach":
+            self.mode = "lead"
+            pos = np.array(state[0][:2])
+            distancesToTargetPoints = np.linalg.norm(
+                pos[np.newaxis] - self.target_points, axis=1
+            )
+            if (self.current_target - 1) % 4 != distancesToTargetPoints.argmin():
+                self.current_target = distancesToTargetPoints.argmin()
+        # too far away from partner fish, go into approach mode
+        elif iid > 0.28 and self.mode == "lead":
+            self.mode = "approach"
+        if self.mode == "approach":
+            angle = np.arctan2(diff[:, 1], diff[:, 0])
+            turn = (angle[0] - state[0][2]) % (2 * np.pi)
+            turn = np.where(turn > np.pi, turn - 2 * np.pi, turn)
+            turn = np.where(turn < -np.pi, turn + 2 * np.pi, turn)
+            self.turn = np.clip(turn, -self.max_turn, self.max_turn)
+            self.speed = self.constant_speed * self._frequency
+        elif self.mode == "lead":
+            pos = np.array(state[0][:2])
+            # check if we are close enough to current target, if yes select next target point, else keep going to current target
+            if np.linalg.norm(pos - self.target_points[self.current_target]) < 0.015:
+                self.current_target = (self.current_target + 1) % 4
+            diff = self.target_points[self.current_target] - pos
+            angle = np.arctan2(diff[1], diff[0])
+            turn = (angle - state[0][2]) % (2 * np.pi)
+            turn = np.where(turn > np.pi, turn - 2 * np.pi, turn)
+            turn = np.where(turn < -np.pi, turn + 2 * np.pi, turn)
+            self.turn = np.clip(turn, -self.max_turn, self.max_turn)
+            self.speed = self.constant_speed * self._frequency
+
+    def step(self, time_step):
+        self.set_angular_velocity(0)
+        if self.turn:
+            self._body.angle += self.turn
+            self.__turn = None
+        if self.speed:
+            self.set_linear_velocity([self.speed, 0.0], local=True)
+            self.__speed = None
 
 
 class TestEnv(GuppyEnv):
@@ -31,8 +98,11 @@ class TestEnv(GuppyEnv):
             TurnSpeedRobot(
                 world=self.world,
                 world_bounds=self.world_bounds,
-                position=(0.3, 0.3),
-                orientation=1.57,
+                position=(
+                    np.random.uniform(low=-0.45, high=0.45),
+                    np.random.uniform(low=-0.45, high=0.45),
+                ),
+                orientation=np.random.uniform() * 2 * np.pi,
             )
         )
 
@@ -41,11 +111,14 @@ class TestEnv(GuppyEnv):
         orientations = np.random.random_sample(num_guppies) * 2 * np.pi - np.pi
         for p, o in zip(positions, orientations):
             self._add_guppy(
-                BoostCouzinGuppy(
+                ApproachLeadGuppy(
                     world=self.world,
                     world_bounds=self.world_bounds,
-                    position=p,
-                    orientation=o,
+                    position=(
+                        np.random.uniform(low=-0.45, high=0.45),
+                        np.random.uniform(low=-0.45, high=0.45),
+                    ),
+                    orientation=np.random.uniform() * 2 * np.pi,
                 )
             )
 
@@ -168,3 +241,31 @@ def testModel_(model, path, dic, timestep):
 
 def distance(x_1, y_1, x_2, y_2):
     return math.sqrt(math.pow(x_1 - x_2, 2) + math.pow(y_1 - y_2, 2))
+
+
+def distanceToClosestWall(trajectory):
+    wall_lines = [
+        (-0.5, -0.5, -0.5, 0.5),
+        (-0.5, -0.5, 0.5, -0.5),
+        (0.5, 0.5, 0.5, -0.5),
+        (0.5, 0.5, -0.5, 0.5),
+    ]
+    distances = np.empty((trajectory.shape[1] // 3 * trajectory.shape[0]))
+
+    for i in range(trajectory.shape[1] // 3):
+        dist = []
+        for wall in wall_lines:
+            dist.append(
+                calculate_distLinePoint(
+                    wall[0],
+                    wall[1],
+                    wall[2],
+                    wall[3],
+                    trajectory[:, [i * 3, i * 3 + 1]],
+                )
+            )
+        distances[i * trajectory.shape[0] : (i + 1) * trajectory.shape[0]] = np.stack(
+            dist
+        ).min(axis=0)
+
+    return np.mean(distances), np.std(distances)

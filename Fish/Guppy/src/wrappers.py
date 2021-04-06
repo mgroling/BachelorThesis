@@ -85,9 +85,11 @@ class DiscreteActionWrapper(gym.ActionWrapper):
         max_turn=np.pi / 4,
         min_speed=0.03,
         max_speed=0.1,
-        frequency=20,
+        frequency=25,
+        last_act=False,
     ):
         super(DiscreteActionWrapper, self).__init__(env)
+        self.last_act = last_act
         assert isinstance(self.action_space, gym.spaces.Box)
         self.turn_rate_bins = np.linspace(-max_turn, max_turn, num_bins_turn_rate)
         self.speed_bins = np.linspace(min_speed, max_speed, num_bins_speed)
@@ -97,6 +99,12 @@ class DiscreteActionWrapper(gym.ActionWrapper):
 
     def action(self, action):
         turn, speed = self.turn_rate_bins[action[0]], self.speed_bins[action[1]]
+
+        if self.last_act:
+            self.last_action = [
+                turn / np.pi,
+                speed / self.speed_bins[-1],
+            ]
 
         return [turn, speed * self.frequency]
 
@@ -118,12 +126,20 @@ class VectorActionWrapper(gym.ActionWrapper):
 
 
 class RayCastingWrapper(gym.ObservationWrapper):
-    def __init__(self, env, degrees=360, num_bins=36):
+    def __init__(self, env, degrees=360, num_bins=36, last_act=False):
         super(RayCastingWrapper, self).__init__(env)
         # redefine observation space
-        self.observation_space = gym.spaces.Box(
-            low=0.0, high=1.0, shape=(2, num_bins), dtype=np.float64
-        )
+        self.last_act = last_act
+        if last_act:
+            self.last_action = [0, 0]
+            self.num_bins = num_bins
+            self.observation_space = gym.spaces.Box(
+                low=0.0, high=1.0, shape=(num_bins * 2 + 2,), dtype=np.float64
+            )
+        else:
+            self.observation_space = gym.spaces.Box(
+                low=0.0, high=1.0, shape=(2, num_bins), dtype=np.float64
+            )
 
         self.diagonal = np.linalg.norm(self.world_bounds[0] - self.world_bounds[1])
         self.cutoff = np.radians(degrees) / 2.0
@@ -133,12 +149,21 @@ class RayCastingWrapper(gym.ObservationWrapper):
         self.obs_placeholder = np.empty(self.observation_space.shape)
 
     def observation(self, state):
-        self.obs_placeholder[0] = compute_dist_bins(
-            state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
-        )
-        self.obs_placeholder[1] = ray_casting_walls(
-            state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1
-        )
+        if self.last_act:
+            self.obs_placeholder[: self.num_bins] = compute_dist_bins(
+                state[0], state[1:], self.sector_bounds, self.diagonal
+            )
+            self.obs_placeholder[self.num_bins : -2] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal
+            )
+            self.obs_placeholder[-2:] = self.last_action
+        else:
+            self.obs_placeholder[0] = compute_dist_bins(
+                state[0], state[1:], self.sector_bounds, self.diagonal
+            )
+            self.obs_placeholder[1] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal
+            )
         return self.obs_placeholder
 
 
@@ -153,9 +178,9 @@ class RayCastingObject:
 
     def observation(self, state):
         self.obs_placeholder[0] = compute_dist_bins(
-            state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
+            state[0], state[1:], self.sector_bounds, self.diagonal
         )
         self.obs_placeholder[1] = ray_casting_walls(
-            state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1
+            state[0], self.world_bounds, self.ray_directions, self.diagonal
         )
         return self.obs_placeholder

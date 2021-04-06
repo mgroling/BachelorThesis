@@ -24,7 +24,9 @@ class MarcGuppy(TurnSpeedGuppy, TurnSpeedRobot):
     def __init__(self, model_path=None, model=None, dic=None, **kwargs):
         super(MarcGuppy, self).__init__(**kwargs)
         if model_path is None and (model is None or dic is None):
-            logging.exception("Either model_path or model and dic have to be specified.")
+            logging.exception(
+                "Either model_path or model and dic have to be specified."
+            )
         elif not model_path is None and not model is None:
             logging.exception("Specify either model_path or model, not both.")
 
@@ -62,13 +64,13 @@ class MarcGuppy(TurnSpeedGuppy, TurnSpeedRobot):
             state[0] = state[self.id]
             state[self.id] = temp[0]
         self.obs_placeholder[1] = ray_casting_walls(
-            state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1
+            state[0], self.world_bounds, self.ray_directions, self.diagonal
         )
         if len(state) == 1:
             self.obs_placeholder[0] = np.zeros((len(self.obs_placeholder[1])))
         else:
             self.obs_placeholder[0] = compute_dist_bins(
-                state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
+                state[0], state[1:], self.sector_bounds, self.diagonal
             )
 
         action, _ = self._model.predict(self.obs_placeholder, deterministic=True)
@@ -82,7 +84,7 @@ class MarcGuppy(TurnSpeedGuppy, TurnSpeedRobot):
 
 
 class MarcGuppyDuo(TurnSpeedGuppy, TurnSpeedRobot):
-    _frequency = 20
+    _frequency = 25
 
     def __init__(
         self, model_path=None, model=None, dic=None, deterministic=True, **kwargs
@@ -110,6 +112,8 @@ class MarcGuppyDuo(TurnSpeedGuppy, TurnSpeedRobot):
         max_speed = dic["max_speed"]
 
         self.deterministic = deterministic
+        self.stuck_counter = 0
+        self.last_act = dic["last_act"]
 
         self._turn_rate_bins = np.linspace(
             min_turn_rate, max_turn_rate, num_bins_turn_rate
@@ -121,36 +125,66 @@ class MarcGuppyDuo(TurnSpeedGuppy, TurnSpeedRobot):
         self.cutoff = np.radians(degrees) / 2.0
         self.sector_bounds = np.linspace(-self.cutoff, self.cutoff, num_bins + 1)
         self.ray_directions = np.linspace(-self.cutoff, self.cutoff, num_bins)
-        self.obs_placeholder = np.empty((2, num_bins))
+        if self.last_act:
+            self.last_action = [0, 0]
+            self.obs_placeholder = np.empty((num_bins * 2 + 2,))
+            self.num_bins = num_bins
+        else:
+            self.obs_placeholder = np.empty((2, num_bins))
 
     def compute_next_action(self, state: np.ndarray, kd_tree: cKDTree = None):
         if not (len(state) == 1 or self.id == 0):
             temp = state.copy()
             state[0] = state[self.id]
             state[self.id] = temp[0]
-        self.obs_placeholder[1] = ray_casting_walls(
-            state[0], self.world_bounds, self.ray_directions, self.diagonal * 1.1
-        )
-        if len(state) == 1:
-            self.obs_placeholder[0] = np.zeros((len(self.obs_placeholder[1])))
-        else:
-            self.obs_placeholder[0] = compute_dist_bins(
-                state[0], state[1:], self.sector_bounds, self.diagonal * 1.1
+        if self.last_act:
+            if len(state) == 1:
+                self.obs_placeholder[: self.num_bins] = 0
+            else:
+                self.obs_placeholder[: self.num_bins] = compute_dist_bins(
+                    state[0], state[1:], self.sector_bounds, self.diagonal
+                )
+            self.obs_placeholder[self.num_bins : -2] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal
             )
+            self.obs_placeholder[-2:] = np.array(self.last_action)
+        else:
+            self.obs_placeholder[1] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal
+            )
+            if len(state) == 1:
+                self.obs_placeholder[0] = np.zeros((len(self.obs_placeholder[1])))
+            else:
+                self.obs_placeholder[0] = compute_dist_bins(
+                    state[0], state[1:], self.sector_bounds, self.diagonal
+                )
 
         action, _ = self._model.predict(
             self.obs_placeholder, deterministic=self.deterministic
         )
 
         turn, speed = self._turn_rate_bins[action[0]], self._speed_bins[action[1]]
+        self.last_action = [
+            turn / np.pi,
+            speed / self._speed_bins[-1],
+        ]
 
         self.turn = turn
-        self.speed = speed * self._frequency
+        if speed == 0:
+            self.stuck_counter += 1
+        else:
+            self.stuck_counter = 0
+        if self.stuck_counter == 20:
+            self.speed = 0.01 * self._frequency
+            self.stuck_counter = 0
+        else:
+            self.speed = speed * self._frequency
 
     def step(self, time_step):
         self.set_angular_velocity(0)
         if self.turn:
             self._body.angle += self.turn
+            self.turn = 0
             self.__turn = None
         if self.speed:
             self.set_linear_velocity([self.speed, 0.0], local=True)

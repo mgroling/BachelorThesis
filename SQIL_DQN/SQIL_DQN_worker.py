@@ -29,7 +29,6 @@ from skimage.measure import block_reduce
 class SQIL_DQN_worker(DQN):
     def _initializeExpertBuffer(self, obs, act):
         done = np.array([[False] for i in range(0, len(obs) - 1)])
-        done[-1] = True
 
         self.expert_buffer.extend(obs[:-1], act, np.ones(len(obs) - 1), obs[1:], done)
 
@@ -52,6 +51,7 @@ class SQIL_DQN_worker(DQN):
         tb_log_name="DQN",
         reset_num_timesteps=True,
         replay_wrapper=None,
+        clipping_during_training=True,
     ):
 
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
@@ -140,52 +140,53 @@ class SQIL_DQN_worker(DQN):
                 else:
                     turn, _ = model_coworker.predict(np.array(obs))
                     speed = action
+                
+                if clipping_during_training:
+                    # check if next state (after action) would be outside of fish tank (CLIPPING)
+                    env_state = self.env.get_state()
+                    turn_speed = self.env.action([turn, speed])
+                    global_turn = env_state[0][2] + turn_speed[0]
+                    coords = np.array(
+                        [
+                            env_state[0][0] + turn_speed[1] * np.cos(global_turn),
+                            env_state[0][1] + turn_speed[1] * np.sin(global_turn),
+                        ]
+                    )
+                    changed = False
+                    if coords[0] < -0.49:
+                        coords[0] = -0.47
+                        changed = True
+                    elif coords[0] > 0.49:
+                        coords[0] = 0.47
+                        changed = True
 
-                # check if next state (after action) would be outside of fish tank (CLIPPING)
-                env_state = self.env.get_state()
-                turn_speed = self.env.action([turn, speed])
-                global_turn = env_state[0][2] + turn_speed[0]
-                coords = np.array(
-                    [
-                        env_state[0][0] + turn_speed[1] * np.cos(global_turn),
-                        env_state[0][1] + turn_speed[1] * np.sin(global_turn),
-                    ]
-                )
-                changed = False
-                if coords[0] < -0.49:
-                    coords[0] = -0.47
-                    changed = True
-                elif coords[0] > 0.49:
-                    coords[0] = 0.47
-                    changed = True
+                    if coords[1] < -0.49:
+                        coords[1] = -0.47
+                        changed = True
+                    elif coords[1] > 0.49:
+                        coords[1] = 0.47
+                        changed = True
 
-                if coords[1] < -0.49:
-                    coords[1] = -0.47
-                    changed = True
-                elif coords[1] > 0.49:
-                    coords[1] = 0.47
-                    changed = True
+                    if changed:
+                        diff = coords - env_state[0, :2]
+                        speed = np.linalg.norm(diff)
+                        angles = np.arctan2(diff[1], diff[0])
+                        turn = angles - env_state[0, 2]
+                        turn = turn - 2 * np.pi if turn > np.pi else turn
+                        turn = turn + 2 * np.pi if turn < -np.pi else turn
 
-                if changed:
-                    diff = coords - env_state[0, :2]
-                    speed = np.linalg.norm(diff)
-                    angles = np.arctan2(diff[1], diff[0])
-                    turn = angles - env_state[0, 2]
-                    turn = turn - 2 * np.pi if turn > np.pi else turn
-                    turn = turn + 2 * np.pi if turn < -np.pi else turn
+                        # convert to DQN output
+                        dist_turn = np.abs(self.env.turn_rate_bins - turn)
+                        dist_speed = np.abs(self.env.speed_bins - speed)
 
-                    # convert to DQN output
-                    dist_turn = np.abs(self.env.turn_rate_bins - turn)
-                    dist_speed = np.abs(self.env.speed_bins - speed)
+                        # convert to bins
+                        turn = np.argmin(dist_turn, axis=0)
+                        speed = np.argmin(dist_speed, axis=0)
 
-                    # convert to bins
-                    turn = np.argmin(dist_turn, axis=0)
-                    speed = np.argmin(dist_speed, axis=0)
-
-                    if role == "turn":
-                        action = turn
-                    else:
-                        action = speed
+                        if role == "turn":
+                            action = turn
+                        else:
+                            action = speed
 
                 reset = False
                 new_obs, rew, done, info = self.env.step([turn, speed])

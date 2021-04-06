@@ -236,6 +236,7 @@ def createRolloutFiles(dic):
     TURN_BINS, SPEED_BINS = dic["turn_bins"], dic["speed_bins"]
     MAX_TURN, MIN_SPEED, MAX_SPEED = dic["max_turn"], dic["min_speed"], dic["max_speed"]
     PERC = dic["perc"]
+    MODE = dic["mode"]
 
     env = TestEnv()
     env = RayCastingWrapper(env, degrees=DEGREES, num_bins=NUM_RAYS)
@@ -256,45 +257,60 @@ def createRolloutFiles(dic):
         os.makedirs(folder[:-1])
 
     """ Distribution Threshholds"""
-    if not os.path.isfile(folder + "distribution_threshholds.json"):
-        obs, act = getAll(
-            ["Fish/Guppy/validationData/Q12I_Fri_Dec__6_11_59_34_2019_Robotracker.csv"],
-            env,
-        )
-        obs = np.concatenate(obs, axis=0)
-        saveDistributionThreshholds(obs, obs, folder, env)
+    obs, act = getAll(
+        ["Fish/Guppy/validationData/CameraCapture2019-05-03T14_58_30_8108-sub_0.hdf5"],
+        env,
+    )
+    obs = np.concatenate(obs, axis=0)
+    for m in MODE:
+        if not os.path.isfile(folder + "distribution_threshholds_" + m + ".json"):
+            saveDistributionThreshholds(obs, obs, folder, env, mode=m)
 
     """ Allowed Actions """
     for perc in PERC:
-        if not os.path.isfile(folder + "allowedActions_val_" + str(perc) + ".json"):
-            max_dist = loadConfig(folder + "distribution_threshholds.json")[
-                "threshhold"
-            ][perc]
-            saveAllowedActions(
-                paths=[
-                    "Fish/Guppy/validationData/" + elem
-                    for elem in os.listdir("Fish/Guppy/validationData")
-                ],
-                env=env,
-                max_dist=max_dist,
-                save_path=folder + "allowedActions_val_" + str(perc) + ".json",
-            )
+        for m in MODE:
+            if not os.path.isfile(
+                folder + "allowedActions_val_" + str(perc) + "_" + m + ".json"
+            ):
+                max_dist = loadConfig(
+                    folder + "distribution_threshholds_" + m + ".json"
+                )["threshhold"][perc]
+                saveAllowedActions(
+                    paths=[
+                        "Fish/Guppy/validationData/" + elem
+                        for elem in os.listdir("Fish/Guppy/validationData")
+                    ],
+                    env=env,
+                    max_dist=max_dist,
+                    save_path=folder
+                    + "allowedActions_val_"
+                    + str(perc)
+                    + "_"
+                    + m
+                    + ".json",
+                    mode=m,
+                )
 
     """ Perfect Agent Actions """
     for perc in PERC:
-        if not os.path.isfile(folder + "perfect_agent_" + str(perc) + ".json"):
-            savePerfectAgentActions(
-                paths_val=[
-                    "Fish/Guppy/validationData/" + elem
-                    for elem in os.listdir("Fish/Guppy/validationData")
-                ],
-                paths_tra=[
-                    "Fish/Guppy/data/" + elem for elem in os.listdir("Fish/Guppy/data")
-                ],
-                env=env,
-                save_path=folder + "perfect_agent_" + str(perc) + ".json",
-                perc=perc,
-            )
+        for m in MODE:
+            if not os.path.isfile(
+                folder + "perfect_agent_" + str(perc) + "_" + m + ".json"
+            ):
+                savePerfectAgentActions(
+                    paths_val=[
+                        "Fish/Guppy/validationData/" + elem
+                        for elem in os.listdir("Fish/Guppy/validationData")
+                    ],
+                    paths_tra=[
+                        "Fish/Guppy/data/" + elem
+                        for elem in os.listdir("Fish/Guppy/data")
+                    ],
+                    env=env,
+                    save_path=folder + "perfect_agent_" + str(perc) + "_" + m + ".json",
+                    perc=perc,
+                    mode=m,
+                )
 
 
 def main():
