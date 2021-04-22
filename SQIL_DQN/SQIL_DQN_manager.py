@@ -1,9 +1,11 @@
 from SQIL_DQN_worker import SQIL_DQN_worker
 from stable_baselines import DQN
 from stable_baselines.common.buffers import ReplayBuffer
+from stable_baselines.deepq import CnnPolicy
 import numpy as np
 import os
 import sys
+import matplotlib.pyplot as plt
 
 from rolloutEv import testExpert
 
@@ -129,9 +131,32 @@ class SQIL_DQN_MANAGER:
 
             print("timestep", (i + 1) * sequential_timesteps, "finished")
 
-    def predict(self, observation, deterministic=True):
-        turn, _ = self._models[0].predict(observation, deterministic=deterministic)
-        speed, _ = self._models[1].predict(observation, deterministic=deterministic)
+    def predict(self, observation, deterministic=True, tau=0.03):
+        if deterministic:
+            turn, _ = self._models[0].predict(observation)
+            speed, _ = self._models[1].predict(observation)
+        else:
+            q_values_turn = self._models[0].step_model.step(np.array([observation]))[1][
+                0
+            ]
+            q_values_speed = self._models[1].step_model.step(np.array([observation]))[
+                1
+            ][0]
+
+            q_values_turn = q_values_turn - q_values_turn.min()
+            q_values_speed = q_values_speed - q_values_speed.min()
+
+            q_values_turn = q_values_turn / q_values_turn.max()
+            q_values_speed = q_values_speed / q_values_speed.max()
+
+            q_values_turn_exp = np.exp(q_values_turn / tau)
+            q_values_speed_exp = np.exp(q_values_speed / tau)
+
+            probabilities_turn = q_values_turn_exp / np.sum(q_values_turn_exp)
+            probabilities_speed = q_values_speed_exp / np.sum(q_values_speed_exp)
+
+            turn = np.random.choice(range(len(q_values_turn)), p=probabilities_turn)
+            speed = np.random.choice(range(len(q_values_speed)), p=probabilities_speed)
 
         return [turn, speed], None
 
@@ -158,8 +183,8 @@ def createSelfEnv(model, dic):
             self._guppy_steps_per_action = 4
 
             pos = (
-                np.random.uniform(low=-0.3, high=0.3),
-                np.random.uniform(low=-0.3, high=0.3),
+                np.random.uniform(low=-0.45, high=0.45),
+                np.random.uniform(low=-0.45, high=0.45),
             )
             ori = np.random.uniform() * 2 * np.pi
 
@@ -186,15 +211,20 @@ def createSelfEnv(model, dic):
                         world=self.world,
                         world_bounds=self.world_bounds,
                         position=(
-                            np.random.uniform(low=-0.3, high=0.3),
-                            np.random.uniform(low=-0.3, high=0.3),
+                            np.random.uniform(low=-0.45, high=0.45),
+                            np.random.uniform(low=-0.45, high=0.45),
                         ),
                         orientation=np.random.uniform() * 2 * np.pi,
                     )
                 )
 
     env = TestEnv(time_step_s=0.04)
-    env = RayCastingWrapper(env, degrees=dic["degrees"], num_bins=dic["num_bins_rays"], last_act=dic["last_act"])
+    env = RayCastingWrapper(
+        env,
+        degrees=dic["degrees"],
+        num_bins=dic["num_bins_rays"],
+        last_act=dic["last_act"],
+    )
     env = DiscreteActionWrapper(
         env,
         num_bins_turn_rate=dic["turn_bins"],
@@ -202,7 +232,7 @@ def createSelfEnv(model, dic):
         max_turn=dic["max_turn"],
         min_speed=dic["min_speed"],
         max_speed=dic["max_speed"],
-        last_act=dic["last_act"]
+        last_act=dic["last_act"],
     )
 
     return env

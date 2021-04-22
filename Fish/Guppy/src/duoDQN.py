@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from wrappers import DiscreteActionWrapper, RayCastingWrapper
+from wrappers import DiscreteActionWrapper, RayCastingWrapper, RayCastingObject
 from convertData import getAll
 from rolloutEv import loadConfig, saveConfig, distObs, checkAction
 from hyperparameter_tuning import saveStudy, loadStudy
@@ -16,6 +16,7 @@ from main import createRolloutFiles
 from conversion_scripts.convert_marc import convertTrajectory
 from robofish.evaluate import evaluate_all
 import robofish.trackviewer
+import robofish.io
 from stable_baselines.deepq.policies import FeedForwardPolicy
 
 sys.path.append("SQIL_DQN")
@@ -60,7 +61,7 @@ def trainModel(
                 **kwargs,
                 layers=dic["nn_layers"][0],
                 layer_norm=dic["nn_norm"][0],
-                feature_extraction="mlp"
+                feature_extraction="mlp",
             )
 
     class CustomDQNPolicy1(FeedForwardPolicy):
@@ -70,7 +71,7 @@ def trainModel(
                 **kwargs,
                 layers=dic["nn_layers"][1],
                 layer_norm=dic["nn_norm"][1],
-                feature_extraction="mlp"
+                feature_extraction="mlp",
             )
 
     model = SQIL_DQN_MANAGER(
@@ -102,25 +103,22 @@ def trainModel(
     )
 
     if volatile:
-        # reward = []
-        # for i in range(len(model.rollout_values)):
-        #     for value in model.rollout_values[i]:
-        #         reward.append(value[0])
+        reward = []
+        for i in range(len(model.rollout_values)):
+            for value in model.rollout_values["both"][i]:
+                reward.append(value[0])
 
-        # return 1 - np.mean(reward)
+        rollout = np.mean(reward)
+        # return_to = 1 - getBackToKnownState(0.07168919273243357, model=model, dic=dic)
+        # print("rollout", rollout, "return", return_to)
 
-        trajectory = testModel(None, save_trajectory=False, model=model, dic=dic)
-
-        mean, std = distanceToClosestWall(trajectory)
-
-        val_mean, val_std = 0.14953857969150395, 0.09866383291652214
-
-        return np.abs(mean - val_mean) + np.abs(std - val_std)
+        return rollout  # * return_to
 
     else:
         model.save("Fish/Guppy/models/" + dic["model_name"])
         saveConfig("Fish/Guppy/models/" + dic["model_name"] + "/parameters.json", dic)
-        # createRolloutPlots(dic, model)
+        if rollout_timesteps is None or rollout_timesteps > 0:
+            createRolloutPlots(dic, model)
 
 
 def createRolloutPlots(dic, model):
@@ -188,7 +186,7 @@ def testModel(
     model_name,
     save_trajectory=True,
     partner="self",
-    determinsitic=True,
+    deterministic=True,
     model=None,
     dic=None,
 ):
@@ -207,6 +205,13 @@ def testModel(
                 0.05,
             )
             orientations = np.random.random_sample(num_guppies) * 2 * np.pi - np.pi
+
+            f = robofish.io.File(
+                "Fish/Guppy/validationData/CameraCapture2019-06-20T15_35_23_672-sub_2.hdf5"
+            )
+            positions = f.entity_poses[:, 0, :2] / 100
+            orientations = f.entity_poses_rad[:, 0, 2]
+
             i = 0
             for p, o in zip(positions, orientations):
                 if i == 0:
@@ -214,7 +219,7 @@ def testModel(
                         MarcGuppyDuo(
                             model=model,
                             dic=dic,
-                            deterministic=determinsitic,
+                            deterministic=deterministic,
                             world=self.world,
                             world_bounds=self.world_bounds,
                             position=(
@@ -241,7 +246,7 @@ def testModel(
 
     env = TestEnvM(time_step_s=0.04)
 
-    env.unwrapped.video_path = "Fish/Guppy/video"
+    env.unwrapped.video_path = "Fish/Guppy/models/" + model_name
 
     obs = env.reset()
     trajectory = np.empty((10000, 6))
@@ -253,7 +258,7 @@ def testModel(
         # print(trajectory[i])
         # time.sleep(0.05)
 
-        env.render()  # mode = "video"
+        env.render(mode="video")  # mode = "video"
     env.close()
 
     if save_trajectory:
@@ -288,8 +293,8 @@ def testModel(
             [
                 ["Fish/Guppy/models/" + model_name + "/trajectory/trajectory_io.hdf5"],
                 [
-                    "Fish/Guppy/validationData/CameraCapture2019-05-03T14_58_30_8108-sub_0.hdf5",
-                    "Fish/Guppy/validationData/CameraCapture2019-06-20T15_35_23_672-sub_2.hdf5",
+                    "Fish/Guppy/validationData/" + elem
+                    for elem in os.listdir("Fish/Guppy/validationData")
                 ],
             ],
             labels=["model", "validationData"],
@@ -313,7 +318,6 @@ def objective(trial):
     gamma = trial.suggest_uniform("gamma", 0.5, 0.999)
     lr = trial.suggest_loguniform("lr", 1e-6, 1e-3)
     n_batch = trial.suggest_int("n_batch", 1, 128)
-    buffer_size = trial.suggest_int("buffer_size", 1e4, 1e5, 1e3)
 
     dic = {
         "turn_bins": 721,
@@ -333,7 +337,7 @@ def objective(trial):
         "gamma": [gamma, gamma],
         "lr": [lr, lr],
         "n_batch": [n_batch, n_batch],
-        "buffer_size": [25000, 25000],
+        "buffer_size": [50000, 50000],
         "learn_partner": "self",
         "clipping_during_training": trial.suggest_categorical(
             "clipping", [True, False]
@@ -342,23 +346,151 @@ def objective(trial):
     }
     print("Learn timesteps", dic["training_timesteps"])
 
-    return trainModel(dic, volatile=True, rollout_timesteps=-1)
+    return trainModel(dic, volatile=True, rollout_timesteps=5)
+
+
+def getBackToKnownState(
+    max_dist,
+    min_timesteps=5,
+    max_timesteps=100,
+    num_trials=100,
+    model_name=None,
+    model=None,
+    dic=None,
+    deterministic=True,
+):
+    if not model_name is None:
+        model = SQIL_DQN_MANAGER.load("Fish/Guppy/models/" + model_name)
+        dic = loadConfig("Fish/Guppy/models/" + model_name + "/parameters.json")
+
+    class TestEnvM(GuppyEnv):
+        def _reset(self):
+            # set frequency of guppies to 25Hz
+            self._guppy_steps_per_action = 4
+
+            num_guppies = 2
+            positions = np.random.normal(size=(num_guppies, 2), scale=0.02) + (
+                0.05,
+                0.05,
+            )
+            orientations = np.random.random_sample(num_guppies) * 2 * np.pi - np.pi
+            i = 0
+            for p, o in zip(positions, orientations):
+                self._add_guppy(
+                    MarcGuppyDuo(
+                        model=model,
+                        dic=dic,
+                        deterministic=deterministic,
+                        world=self.world,
+                        world_bounds=self.world_bounds,
+                        position=(
+                            np.random.uniform(low=-0.49, high=0.49),
+                            np.random.uniform(low=-0.49, high=0.49),
+                        ),
+                        orientation=np.random.uniform() * 2 * np.pi,
+                    )
+                )
+
+    env_ = TestEnvM(time_step_s=0.04)
+    env_ = RayCastingWrapper(
+        env_,
+        degrees=dic["degrees"],
+        num_bins=dic["num_bins_rays"],
+        last_act=dic["last_act"],
+    )
+    env_ = DiscreteActionWrapper(
+        env_,
+        num_bins_turn_rate=dic["turn_bins"],
+        num_bins_speed=dic["speed_bins"],
+        max_turn=dic["max_turn"],
+        min_speed=dic["min_speed"],
+        max_speed=dic["max_speed"],
+        last_act=dic["last_act"],
+    )
+
+    obs, act = getAll(
+        [
+            "Fish/Guppy/validationData/" + elem
+            for elem in os.listdir("Fish/Guppy/validationData")
+        ],
+        env_,
+        False,
+        dic["last_act"],
+    )
+    obs = np.concatenate(obs, axis=0)
+
+    env = TestEnvM(time_step_s=0.04)
+    ray = RayCastingObject(
+        degrees=dic["degrees"],
+        num_bins=dic["num_bins_rays"],
+        last_act=dic["last_act"],
+    )
+
+    steps_required = []
+
+    for j in range(num_trials):
+        obs_ = env.reset()
+        obs_[:, 2] = obs_[:, 2] % (2 * np.pi)
+
+        dist = min(
+            distObs(ray.observation(obs_), obs, env_, mode="both").min(axis=0),
+            distObs(ray.observation(obs_[[1, 0]]), obs, env_, mode="both").min(axis=0),
+        )
+        while dist < max_dist:
+            obs_ = env.reset()
+            obs_[:, 2] = obs_[:, 2] % (2 * np.pi)
+
+            dist = min(
+                distObs(ray.observation(obs_), obs, env_, mode="both").min(axis=0),
+                distObs(ray.observation(obs_[[1, 0]]), obs, env_, mode="both").min(
+                    axis=0
+                ),
+            )
+
+        known = 0
+        for i in range(max_timesteps):
+            obs_ = env.step(action=None)[0]
+            obs_[:, 2] = obs_[:, 2] % (2 * np.pi)
+
+            dist = min(
+                distObs(ray.observation(obs_), obs, env_, mode="both").min(axis=0),
+                distObs(ray.observation(obs_[[1, 0]]), obs, env_, mode="both").min(
+                    axis=0
+                ),
+            )
+
+            if dist < max_dist:
+                known += 1
+                if known >= min_timesteps:
+                    steps_required.append(i)
+                    break
+            else:
+                known = 0
+            if i == max_timesteps - 1:
+                steps_required.append(i)
+    env.close()
+
+    print(steps_required)
+
+    steps_required = np.array(steps_required) / max_timesteps
+
+    return np.mean(steps_required)
 
 
 def study():
-    # study = optuna.create_study()
-    study = loadStudy("Fish/Guppy/studies/study_duoDQN.pkl")
+    # study = optuna.create_study(direction="maximize")
+    study = loadStudy("Fish/Guppy/studies/study_duoDQN_new.pkl")
 
     # while True:
     #     study.optimize(objective, n_trials=1)
-    #     saveStudy(study, "Fish/Guppy/studies/study_duoDQN.pkl")
+    #     saveStudy(study, "Fish/Guppy/studies/study_duoDQN_new.pkl")
 
     print(study.best_params)
 
 
 if __name__ == "__main__":
     dic = {
-        "model_name": "DuoDQN_05_04_2021_03",
+        "model_name": "DuoDQN_20_04_2021_01",
         "turn_bins": 721,
         "speed_bins": 201,
         "min_speed": 0.00,
@@ -366,17 +498,17 @@ if __name__ == "__main__":
         "max_turn": np.pi,
         "degrees": 360,
         "num_bins_rays": 36,
-        "nn_layers": [[256], [256]],
+        "nn_layers": [[81, 16], [81, 16]],
         "nn_norm": [False, False],
-        "explore_fraction": [0.1, 0.1],
-        "training_timesteps": 2e5,
+        "explore_fraction": [0.4833053065393449, 0.4833053065393449],
+        "training_timesteps": 172000,
         "sequential_timesteps": 1000,
         "perc": [0, 1],
-        "mode": ["both", "fish", "wall"],
-        "gamma": [0.99, 0.99],
-        "lr": [1e-6, 1e-6],
-        "n_batch": [64, 64],
-        "buffer_size": [25e3, 25e3],
+        "mode": ["both", "wall", "fish"],
+        "gamma": [0.95, 0.95],
+        "lr": [4.31774957153978e-06, 4.31774957153978e-06],
+        "n_batch": [2, 2],
+        "buffer_size": [50000, 50000],
         "learn_partner": "self",
         "clipping_during_training": False,
         "last_act": False,
@@ -384,9 +516,11 @@ if __name__ == "__main__":
     createRolloutFiles(dic)
     # trainModel(dic, volatile=False, rollout_timesteps=-1)
     # testModel(
-    #     dic["model_name"], save_trajectory=True, partner="self", determinsitic=True
+    #     dic["model_name"], save_trajectory=True, partner="self", deterministic=False
     # )
     # study()
+    # print(getBackToKnownState(7.166992719311764, model_name=dic["model_name"]))
+    # model = SQIL_DQN_MANAGER.load("Fish/Guppy/models/" + dic["model_name"])
     # env = TestEnv(time_step_s=0.04)
     # env = RayCastingWrapper(
     #     env,
@@ -403,6 +537,7 @@ if __name__ == "__main__":
     #     max_speed=dic["max_speed"],
     #     last_act=dic["last_act"],
     # )
+    # saveModelActions(["Fish/Guppy/validationData/" + elem for elem in os.listdir("Fish/Guppy/validationData")], model, env, deterministic=True, convMat=True)
     # obs_, act_ = getAll(
     #     ["Fish/Guppy/data/" + elem for elem in os.listdir("Fish/Guppy/data")],
     #     env,
@@ -441,8 +576,8 @@ if __name__ == "__main__":
     # print("x should be", np.mean(f) / np.mean(w))
     # plt.hist(
     #     [f, w],
-    #     bins=100,
-    #     range=[0, max(max(f), max(w))],
+    #     bins=50,
+    #     range=[0, 100],
     #     label=["fish raycasts", "wall raycasts"],
     #     density=True,
     # )

@@ -6,6 +6,7 @@ import pandas as pd
 import gym
 import os
 import sys
+import time
 import matplotlib.pyplot as plt
 
 from stable_baselines import logger
@@ -77,7 +78,8 @@ class SQIL_DQN_worker(DQN):
                     final_p=1.0,
                 )
             else:
-                self.replay_buffer = ReplayBuffer(self.buffer_size)
+                if self.replay_buffer is None:
+                    self.replay_buffer = ReplayBuffer(self.buffer_size)
                 self.beta_schedule = None
 
             if replay_wrapper is not None:
@@ -136,11 +138,11 @@ class SQIL_DQN_worker(DQN):
                 turn, speed = None, None
                 if role == "turn":
                     turn = action
-                    speed, _ = model_coworker.predict(np.array(obs))
+                    speed, nothing = model_coworker.predict(np.array(obs))
                 else:
-                    turn, _ = model_coworker.predict(np.array(obs))
+                    turn, nothing = model_coworker.predict(np.array(obs))
                     speed = action
-                
+
                 if clipping_during_training:
                     # check if next state (after action) would be outside of fish tank (CLIPPING)
                     env_state = self.env.get_state()
@@ -204,8 +206,22 @@ class SQIL_DQN_worker(DQN):
                 else:
                     # Avoid changing the original ones
                     obs_, new_obs_, reward_ = obs, new_obs, rew
+
                 # Store transition in the replay buffer, but change reward to 0 (use it for plot later though)
                 self.replay_buffer.add(obs_, action, 0, new_obs_, float(done))
+
+                # Also give transition to model coworker
+                if model_coworker.replay_buffer is None:
+                    model_coworker.replay_buffer = ReplayBuffer(self.buffer_size)
+                if role == "turn":
+                    model_coworker.replay_buffer.add(
+                        obs_, speed, 0, new_obs_, float(done)
+                    )
+                else:
+                    model_coworker.replay_buffer.add(
+                        obs_, turn, 0, new_obs_, float(done)
+                    )
+
                 obs = new_obs
                 # Save the unnormalized observation
                 if self._vec_normalize_env is not None:

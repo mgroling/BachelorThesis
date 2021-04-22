@@ -25,12 +25,10 @@ def getExpert(path, env, matrixMode=True, last_act=False):
     # calculate turn/speed values
     n = poses.shape[1]
     diff = np.diff(poses, axis=1)
-    speed = np.linalg.norm(diff, axis=2)
+    speed = np.linalg.norm(diff, axis=2)[:, 1:]
     angles = np.arctan2(diff[:, :, 1], diff[:, :, 0])
 
-    turn = np.zeros_like(angles)
-    turn[:, 0] = angles[:, 0]
-    turn[:, 1:] = np.diff(angles)
+    turn = np.diff(angles)
     # convert turn values from [-2pi, 2pi] to [-pi, pi]
     turn = np.where(turn > np.pi, turn - 2 * np.pi, turn)
     turn = np.where(turn < -np.pi, turn + 2 * np.pi, turn)
@@ -38,12 +36,18 @@ def getExpert(path, env, matrixMode=True, last_act=False):
     poses = f.entity_poses_rad
     # convert x,y from cm to m
     poses[:, :, :2] = poses[:, :, :2] / 100
-    # change orientations of the fish to the vector from the last position, except the first position which we set to 0
-    poses[:, 0, 2] = 0
+    # change orientations of the fish to the vector from the last position
     poses[:, 1:, 2] = angles
 
-    # remove last row of poses, since we do not have a turn/speed value for it
-    poses = poses[:, :-1]
+    # remove first and last row of poses, since we do not have a turn/speed value for it
+    poses = poses[:, 1:-1]
+
+    # remove all rows that have an iid of more than 20cm (not necessary since all files are handpicked to have that)
+    # rows_to_keep = np.sqrt(np.sum(np.square(poses[0, :, :2] - poses[1, :, :2]), axis=1)) <= 0.2
+    # print(sum(rows_to_keep) == poses.shape[1])
+    # poses = poses[:, rows_to_keep]
+    # turn = turn[:, rows_to_keep]
+    # speed = speed[:, rows_to_keep]
 
     # convert raw turn/speed values to bin format
     # get distance from each turn/speed to each bin of the corresponding type

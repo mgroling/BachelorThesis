@@ -197,9 +197,22 @@ class Model:
         self._models[0] = DQN.load(path + "/model_turn")
         self._models[1] = DQN.load(path + "/model_speed")
 
-    def predict(self, observation, deterministic=True):
-        turn, _ = self._models[0].predict(observation, deterministic=deterministic)
-        speed, _ = self._models[1].predict(observation, deterministic=deterministic)
+    def predict(self, observation, deterministic=True, tau = 0.5):
+        if deterministic:
+            turn, _ = self._models[0].predict(observation)
+            speed, _ = self._models[1].predict(observation)
+        else:
+            q_values_turn = self.models[0].step_model.step(np.array([observation]))[1][0]
+            q_values_speed = self.models[1].step_model.step(np.array([observation]))[1][0]
+
+            q_values_turn_exp = np.exp(q_values_turn / tau)
+            q_values_speed_exp = np.exp(q_values_speed / tau)
+
+            probabilities_turn = q_values_turn_exp / np.sum(q_values_turn_exp)
+            probabilities_speed = q_values_speed_exp / np.sum(q_values_speed_exp)
+
+            turn = np.random.choice(range(len(q_values_turn)), p=probabilities_turn)
+            speed = np.random.choice(range(len(q_values_speed)), p=probabilities_speed)
 
         return [turn, speed], None
 

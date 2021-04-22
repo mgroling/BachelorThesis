@@ -16,9 +16,9 @@ def distObs(obs_1, obs_2, env, mode="both"):
     if mode == "fish":
         return distFish(obs_1, obs_2, env)
     elif mode == "wall":
-        return distWall(obs_1, obs_2) * 0.0212368593852758
+        return distWall(obs_1, obs_2) * 2.123003018359641
     else:
-        return distFish(obs_1, obs_2, env) + distWall(obs_1, obs_2) * 0.0212368593852758
+        return distFish(obs_1, obs_2, env) + distWall(obs_1, obs_2) * 2.123003018359641
 
 
 def distWall(obs_1, obs_2):
@@ -44,7 +44,8 @@ def distFish(obs_1, obs_2, env):
     )
     pos_2 = np.swapaxes(pos_2, 0, 1)
     distance = np.linalg.norm(pos_1 - pos_2, axis=1)
-    return distance
+
+    return distance * 100
 
 
 def closeActions(single_obs, all_obs, all_act, max_dist, env, mode="both"):
@@ -58,7 +59,7 @@ def closeActions(single_obs, all_obs, all_act, max_dist, env, mode="both"):
 
 
 def checkAction(action, allowedActions, env):
-    maxTurnDiff, maxSpeedDiff = 0.0872665, 0.003
+    maxTurnDiff, maxSpeedDiff = np.radians(2), 0.001
 
     allowedActions = np.array(allowedActions)
     turn, speed = (
@@ -76,6 +77,25 @@ def checkAction(action, allowedActions, env):
             np.abs(speed - allowedSpeed) <= maxSpeedDiff,
         )
     ).any()
+
+
+def checkActionVec(action, allowedActions, env):
+    maxTurnDiff, maxSpeedDiff = np.radians(2), 0.001
+    action, allowedActions = np.array(action), np.array(allowedActions)
+
+    turn, speed = (
+        env.turn_rate_bins[(action / len(env.speed_bins)).astype(int)],
+        env.speed_bins[(action % len(env.speed_bins)).astype(int)],
+    )
+    allowedTurn, allowedSpeed = (
+        env.turn_rate_bins[(allowedActions / len(env.speed_bins)).astype(int)],
+        env.speed_bins[(allowedActions % len(env.speed_bins)).astype(int)],
+    )
+
+    return np.logical_and(
+        (np.abs(turn - allowedTurn) <= maxTurnDiff),
+        (np.abs(speed - allowedSpeed) <= maxSpeedDiff),
+    ).any(axis=1)
 
 
 def testExpert(
@@ -104,15 +124,29 @@ def testExpert(
         + ".json"
     )["allowed actions"]
 
-    for i in range(0, len(obs)):
-        action, _ = model.predict(obs[i], deterministic=deterministic)
-        if convMat:
-            action = action[0] * speed_bins + action[1]
-        if checkAction(action, acceptedActions[i], env):
-            reward[i] = 1
-        rand = random.randint(0, turn_bins * speed_bins - 1)
-        if checkAction(rand, acceptedActions[i], env):
-            random_reward[i] = 1
+    # convert accepted actions to common shape ndarray
+    lens = [len(l) for l in acceptedActions]
+    maxlen = max(lens)
+    arr = np.tile(
+        np.array([[elem[0] for elem in acceptedActions]]).transpose(), (1, maxlen)
+    )
+    mask = np.arange(maxlen) < np.array(lens)[:, None]
+    arr[mask] = np.concatenate(acceptedActions)
+
+    agentActions, _ = model.predict(obs, deterministic=deterministic)
+    agentActions = np.array(agentActions).transpose()
+    if convMat:
+        agentActions = np.array(
+            [agentActions[:, 0] * speed_bins + agentActions[:, 1]]
+        ).transpose()
+    randomActions = np.array(
+        [np.random.randint(turn_bins * speed_bins, size=len(obs))]
+    ).transpose()
+
+    temp = checkActionVec(agentActions, arr, env)
+    agentRatio = np.sum(temp) / len(temp)
+    temp = checkActionVec(randomActions, arr, env)
+    randomRatio = np.sum(temp) / len(temp)
 
     dic = loadConfig(
         "Fish/Guppy/rollout/tbins"
@@ -127,8 +161,8 @@ def testExpert(
     )
 
     return (
-        np.mean(reward),
-        np.mean(random_reward),
+        agentRatio,
+        randomRatio,
         dic["perfect agent ratio"],
         dic["closest agent ratio"],
     )
@@ -151,7 +185,7 @@ def saveDistributionThreshholds(obs_1, obs_2, save_path, env, mode="both"):
     }
     saveConfig(save_path + "distribution_threshholds_" + mode + ".json", dic)
     plt.clf()
-    plt.hist(distances, bins=100, range=[0, 3], density=True)
+    plt.hist(distances, bins=100, density=True)
     plt.title("Distribution of distances (" + mode + " distances)")
     plt.xlabel("Distance")
     plt.ylabel("Frequency")
@@ -180,8 +214,7 @@ def savePerfectAgentActions(paths_val, paths_tra, env, save_path, perc, mode="bo
     obs_val, act_val = np.concatenate(obs_val, axis=0), np.concatenate(act_val, axis=0)
     obs_tra, act_tra = getAll(paths_tra, env)
     obs_tra, act_tra = np.concatenate(obs_tra, axis=0), np.concatenate(act_tra, axis=0)
-    correct = np.zeros((len(obs_val), 1))
-    perfect = []
+    closestAgentActions = np.zeros((len(obs_val), 1))
     dic = loadConfig(
         "Fish/Guppy/rollout/tbins"
         + str(turn_bins)
@@ -196,18 +229,28 @@ def savePerfectAgentActions(paths_val, paths_tra, env, save_path, perc, mode="bo
     acceptedActions = dic["allowed actions"]
     max_dist = dic["max_dist"]
 
+    # convert accepted actions to common shape ndarray
+    lens = [len(l) for l in acceptedActions]
+    maxlen = max(lens)
+    arr = np.tile(
+        np.array([[elem[0] for elem in acceptedActions]]).transpose(), (1, maxlen)
+    )
+    mask = np.arange(maxlen) < np.array(lens)[:, None]
+    arr[mask] = np.concatenate(acceptedActions)
+
     print("Computing perfect agent ratio, mode:", mode, "perc:", perc)
     for i in range(len(obs_val)):
         if i % 1000 == 0:
             print("timestep", i, "finished")
-        action = act_tra[distObs(obs_val[i], obs_tra, env, mode).argmin()]
-        if checkAction(int(action), acceptedActions[i], env):
-            correct[i] = 1
+        closestAgentActions[i] = act_tra[
+            distObs(obs_val[i], obs_tra, env, mode).argmin()
+        ]
+    temp = checkActionVec(closestAgentActions, arr, env)
 
-        # actions = closeActions(obs_val[i], obs_tra, act_tra, max_dist)
-        # perfect.append(1 if len(set(actions).union(set(acceptedActions[i]))) > 0 else 0)
+    correct = np.sum(temp) / len(temp)
+
     dic = {
-        "closest agent ratio": np.array(correct).mean(),
+        "closest agent ratio": correct,
         "perfect agent ratio": 1,
     }
     saveConfig(save_path, dic)

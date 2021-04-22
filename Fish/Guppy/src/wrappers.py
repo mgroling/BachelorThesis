@@ -168,19 +168,32 @@ class RayCastingWrapper(gym.ObservationWrapper):
 
 
 class RayCastingObject:
-    def __init__(self, degrees=360, num_bins=36 * 2):
+    def __init__(self, degrees=360, num_bins=36 * 2, last_act = False):
+        self.last_act = last_act
         self.world_bounds = [np.array([-0.5, -0.5]), np.array([0.5, 0.5])]
         self.diagonal = np.linalg.norm(self.world_bounds[0] - self.world_bounds[1])
         self.cutoff = np.radians(degrees) / 2.0
         self.sector_bounds = np.linspace(-self.cutoff, self.cutoff, num_bins + 1)
         self.ray_directions = np.linspace(-self.cutoff, self.cutoff, num_bins)
-        self.obs_placeholder = np.empty((2, num_bins))
+        if last_act:
+            self.obs_placeholder = np.empty((num_bins * 2 + 2,))
+        else:
+            self.obs_placeholder = np.empty((2, num_bins))
 
     def observation(self, state):
-        self.obs_placeholder[0] = compute_dist_bins(
-            state[0], state[1:], self.sector_bounds, self.diagonal
-        )
-        self.obs_placeholder[1] = ray_casting_walls(
-            state[0], self.world_bounds, self.ray_directions, self.diagonal
-        )
+        if self.last_act:
+            self.obs_placeholder[: self.num_bins] = compute_dist_bins(
+                state[0], state[1:], self.sector_bounds, self.diagonal
+            )
+            self.obs_placeholder[self.num_bins : -2] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal
+            )
+            self.obs_placeholder[-2:] = self.last_action
+        else:
+            self.obs_placeholder[0] = compute_dist_bins(
+                state[0], state[1:], self.sector_bounds, self.diagonal
+            )
+            self.obs_placeholder[1] = ray_casting_walls(
+                state[0], self.world_bounds, self.ray_directions, self.diagonal
+            )
         return self.obs_placeholder
