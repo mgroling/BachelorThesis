@@ -238,13 +238,44 @@ def savePerfectAgentActions(paths_val, paths_tra, env, save_path, perc, mode="bo
     mask = np.arange(maxlen) < np.array(lens)[:, None]
     arr[mask] = np.concatenate(acceptedActions)
 
-    print("Computing perfect agent ratio, mode:", mode, "perc:", perc)
-    for i in range(len(obs_val)):
-        if i % 1000 == 0:
-            print("timestep", i, "finished")
-        closestAgentActions[i] = act_tra[
-            distObs(obs_val[i], obs_tra, env, mode).argmin()
-        ]
+    if not os.path.exists(
+        "Fish/Guppy/rollout/tbins"
+        + str(turn_bins)
+        + "_sbins"
+        + str(speed_bins)
+        + "/perfect_agent_actions_"
+        + mode
+        + ".json"
+    ):
+        print("Computing perfect agent ratio, mode:", mode, "perc:", perc)
+        for i in range(len(obs_val)):
+            if i % 1000 == 0:
+                print("timestep", i, "finished")
+            closestAgentActions[i] = act_tra[
+                distObs(obs_val[i], obs_tra, env, mode).argmin()
+            ]
+        save_dic = {"actions": closestAgentActions.tolist(), "mode": mode}
+        saveConfig(
+            "Fish/Guppy/rollout/tbins"
+            + str(turn_bins)
+            + "_sbins"
+            + str(speed_bins)
+            + "/perfect_agent_actions_"
+            + mode
+            + ".json",
+            save_dic,
+        )
+    else:
+        closestAgentActions = loadConfig(
+            "Fish/Guppy/rollout/tbins"
+            + str(turn_bins)
+            + "_sbins"
+            + str(speed_bins)
+            + "/perfect_agent_actions_"
+            + mode
+            + ".json"
+        )["actions"]
+
     temp = checkActionVec(closestAgentActions, arr, env)
 
     correct = np.sum(temp) / len(temp)

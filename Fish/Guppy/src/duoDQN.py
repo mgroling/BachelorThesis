@@ -119,6 +119,10 @@ def trainModel(
         saveConfig("Fish/Guppy/models/" + dic["model_name"] + "/parameters.json", dic)
         if rollout_timesteps is None or rollout_timesteps > 0:
             createRolloutPlots(dic, model)
+        saveConfig(
+            "Fish/Guppy/models/" + dic["model_name"] + "/rollout_values.json",
+            model.rollout_values,
+        )
 
 
 def createRolloutPlots(dic, model):
@@ -137,7 +141,8 @@ def createRolloutPlots(dic, model):
         fig, ax = plt.subplots(
             len(model.rollout_values[mode]),
             1,
-            figsize=(int(len(reward[0]) / 5 + 3), len(model.rollout_values[mode]) * 6),
+            figsize=(8, len(model.rollout_values[mode]) * 3),
+            sharex=True,
         )
         if len(model.rollout_values[mode]) == 1:
             ax = [ax]
@@ -158,7 +163,7 @@ def createRolloutPlots(dic, model):
             ax[i].plot(x, random_reward[i], label="random agent")
             ax[i].plot(x, perfect_reward[i], label="perfect agent")
             ax[i].plot(x, closest_reward[i], label="closest state agent")
-            ax[i].set_ylim(0, 1)
+            # ax[i].set_ylim(0, 1)
             ax[i].set_ylabel("average reward")
             ax[i].set_title(
                 "max_dist between obs: "
@@ -168,11 +173,41 @@ def createRolloutPlots(dic, model):
                 + "% closest states, "
                 + mode
                 + " distances)",
+                fontsize=11,
+            )
+
+            const_up = 0.03  # -0.065
+
+            legend = ax[i].legend(bbox_to_anchor=(1, 0.6))
+            legend.get_title().set_fontsize("10")
+
+            for a, b in zip(np.arange(len(reward[i]))[::10][:-1], reward[i][::10][:-1]):
+                ax[i].text(a * 1000, b + const_up, str(np.round(b, 2)), fontsize=10)
+
+            ax[i].text(
+                (len(reward[i]) - 1) * 1000 + 200,
+                reward[i][-1] - 0.02,  # -0.06
+                str(np.round(reward[i][-1], 2)),
                 fontsize=10,
             )
-            ax[i].legend(loc="center left")
-            for a, b in zip(np.arange(len(reward[i])), reward[i]):
-                ax[i].text(a * 1000, b, str(np.round(b, 2)), fontsize=6)
+            ax[i].text(
+                (len(random_reward[i]) - 1) * 1000 + 200,
+                random_reward[i][-1] - 0.02,
+                str(np.round(random_reward[i][-1], 2)),
+                fontsize=10,
+            )
+            ax[i].text(
+                (len(perfect_reward[i]) - 1) * 1000 + 200,
+                perfect_reward[i][-1] - 0.02,
+                str(np.round(perfect_reward[i][-1], 2)),
+                fontsize=10,
+            )
+            ax[i].text(
+                (len(closest_reward[i]) - 1) * 1000 + 200,
+                closest_reward[i][-1] - 0.02,  # -0.06
+                str(np.round(closest_reward[i][-1], 2)),
+                fontsize=10,
+            )
 
             ax[-1].set_xlabel("timestep of training")
             fig.suptitle("Average reward per sample in Validation Dataset", fontsize=16)
@@ -258,7 +293,7 @@ def testModel(
         # print(trajectory[i])
         # time.sleep(0.05)
 
-        env.render(mode="video")  # mode = "video"
+        env.render()  # mode = "video"
     env.close()
 
     if save_trajectory:
@@ -479,18 +514,19 @@ def getBackToKnownState(
 
 def study():
     # study = optuna.create_study(direction="maximize")
-    study = loadStudy("Fish/Guppy/studies/study_duoDQN_new.pkl")
+    study = loadStudy("Fish/Guppy/studies/study_duoDQN.pkl")
 
     # while True:
     #     study.optimize(objective, n_trials=1)
     #     saveStudy(study, "Fish/Guppy/studies/study_duoDQN_new.pkl")
 
     print(study.best_params)
+    print(study.get_trials())
 
 
 if __name__ == "__main__":
     dic = {
-        "model_name": "DuoDQN_20_04_2021_01",
+        "model_name": "DuoDQN_23_04_2021_02",
         "turn_bins": 721,
         "speed_bins": 201,
         "min_speed": 0.00,
@@ -501,10 +537,10 @@ if __name__ == "__main__":
         "nn_layers": [[81, 16], [81, 16]],
         "nn_norm": [False, False],
         "explore_fraction": [0.4833053065393449, 0.4833053065393449],
-        "training_timesteps": 172000,
+        "training_timesteps": 163000,
         "sequential_timesteps": 1000,
         "perc": [0, 1],
-        "mode": ["both", "wall", "fish"],
+        "mode": ["both", "fish", "wall"],
         "gamma": [0.95, 0.95],
         "lr": [4.31774957153978e-06, 4.31774957153978e-06],
         "n_batch": [2, 2],
@@ -513,12 +549,42 @@ if __name__ == "__main__":
         "clipping_during_training": False,
         "last_act": False,
     }
-    createRolloutFiles(dic)
-    # trainModel(dic, volatile=False, rollout_timesteps=-1)
+    # createRolloutFiles(dic)
+    # trainModel(dic, volatile=False, rollout_timesteps=None)
+
+    # class Temp:
+    #     def __init__(self, dic):
+    #         self.rollout_values = dic
+
+    # model = Temp(
+    #     loadConfig("Fish/Guppy/models/DuoDQN_23_04_2021_03/rollout_values.json")
+    # )
+    # createRolloutPlots(dic, model)
+
     # testModel(
     #     dic["model_name"], save_trajectory=True, partner="self", deterministic=False
     # )
     # study()
+
+    # x = np.arange(163)
+    # fig, ax = plt.subplots(
+    #     2,
+    #     1,
+    #     figsize=(8, 6),
+    # )
+    # ax[0].plot(x, label="sqil")
+    # ax[1].plot(x, label="sqil")
+    # for a in x[::10]:
+    #     ax[0].text(a - 5, a + 5, str(0.52), fontsize=10)
+    #     ax[1].text(a - 5, a + 5, str(0.52), fontsize=10)
+    # legend = ax[0].legend(loc="top left")
+    # legend.get_title().set_fontsize("12")
+    # legend = ax[1].legend(loc="top left")
+    # legend.get_title().set_fontsize("12")
+    # # plt.setp(plt.gca().get_legend().get_texts(), fontsize='12')
+    # ax[0].text(x[-1] + 5, x[-1] + 5, str(np.round(x[-1], 2)), fontsize=10)
+    # ax[1].text(x[-1] + 5, x[-1] + 5, str(np.round(x[-1], 2)), fontsize=10)
+    # plt.savefig("Fish/Guppy/random_plots/test_plot.png")
     # print(getBackToKnownState(7.166992719311764, model_name=dic["model_name"]))
     # model = SQIL_DQN_MANAGER.load("Fish/Guppy/models/" + dic["model_name"])
     # env = TestEnv(time_step_s=0.04)
@@ -586,14 +652,16 @@ if __name__ == "__main__":
     # plt.ylabel("density")
     # plt.legend()
     # plt.show()
-    # evaluate_all(
-    #     [
-    #         [
-    #             "Fish/Guppy/rollout/validationData/Q12I_Fri_Dec__6_11_59_34_2019_Robotracker.hdf5",
-    #             "Fish/Guppy/rollout/validationData/Q15A_Fri_Dec__6_13_47_05_2019_Robotracker.hdf5",
-    #         ],
-    #     ],
-    #     names=["validationData"],
-    #     save_folder="Fish/Guppy/random_plots/robot_valData/",
-    #     predicate=[lambda e: e.category == "robot"],
-    # )
+    model_name = dic["model_name"]
+    evaluate_all(
+            [
+                ["Fish/Guppy/models/" + model_name + "/trajectory/trajectory_io.hdf5"],
+                [
+                    "Fish/Guppy/validationData/" + elem
+                    for elem in os.listdir("Fish/Guppy/validationData")
+                ],
+            ],
+            labels=["model", "validationData"],
+            save_folder="Fish/Guppy/models/" + model_name + "/trajectory/",
+            predicate=[None, None],
+        )

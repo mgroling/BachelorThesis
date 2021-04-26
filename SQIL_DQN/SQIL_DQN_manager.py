@@ -131,7 +131,7 @@ class SQIL_DQN_MANAGER:
 
             print("timestep", (i + 1) * sequential_timesteps, "finished")
 
-    def predict(self, observation, deterministic=True, tau=0.03):
+    def predict(self, observation, deterministic=True, tau=0.04):
         if deterministic:
             turn, _ = self._models[0].predict(observation)
             speed, _ = self._models[1].predict(observation)
@@ -183,8 +183,8 @@ def createSelfEnv(model, dic):
             self._guppy_steps_per_action = 4
 
             pos = (
-                np.random.uniform(low=-0.45, high=0.45),
-                np.random.uniform(low=-0.45, high=0.45),
+                np.random.uniform(low=-0.3, high=0.3),
+                np.random.uniform(low=-0.3, high=0.3),
             )
             ori = np.random.uniform() * 2 * np.pi
 
@@ -211,8 +211,8 @@ def createSelfEnv(model, dic):
                         world=self.world,
                         world_bounds=self.world_bounds,
                         position=(
-                            np.random.uniform(low=-0.45, high=0.45),
-                            np.random.uniform(low=-0.45, high=0.45),
+                            np.random.uniform(low=-0.3, high=0.3),
+                            np.random.uniform(low=-0.3, high=0.3),
                         ),
                         orientation=np.random.uniform() * 2 * np.pi,
                     )
