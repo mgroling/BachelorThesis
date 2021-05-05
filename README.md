@@ -13,6 +13,3 @@ The collective behaviour of groups of animals emerges from interaction between i
 [Expert data](https://github.com/marc131183/BachelorThesis/tree/master/Fish/Guppy/data)
 
 [Validation data](https://github.com/marc131183/BachelorThesis/tree/master/Fish/Guppy/validationData)
-
-
-
