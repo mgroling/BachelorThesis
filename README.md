@@ -17,4 +17,5 @@ The collective behaviour of groups of animals emerges from interaction between i
 ## Important files
 
 [Train model](https://github.com/marc131183/BachelorThesis/blob/master/Fish/Guppy/src/duoDQN.py)
+
 [Evaluate model's performance (rollout)](https://github.com/marc131183/BachelorThesis/blob/master/Fish/Guppy/src/rolloutEv.py)
