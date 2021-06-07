@@ -7,7 +7,7 @@ from stable_baselines import DQN
 class Model:
     _frequency = 25
 
-    def __init__(self, path, deterministic=False, tau=0.03):
+    def __init__(self, path, deterministic=False, tau=0.05):
         self.turn_model = DQN.load(path + "model_turn")
         self.speed_model = DQN.load(path + "model_speed")
         dic = loadConfig(path + "parameters.json")

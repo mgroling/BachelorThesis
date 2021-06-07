@@ -131,7 +131,7 @@ class SQIL_DQN_MANAGER:
 
             print("timestep", (i + 1) * sequential_timesteps, "finished")
 
-    def predict(self, observation, deterministic=True, tau=0.04):
+    def predict(self, observation, deterministic=True, tau=0.05):
         if deterministic:
             turn, _ = self._models[0].predict(observation)
             speed, _ = self._models[1].predict(observation)
